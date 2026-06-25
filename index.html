@@ -7,7 +7,26 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app-shell">
+    <main class="login-page" id="authShell">
+      <section class="login-shell">
+        <form class="login-card" id="authForm">
+          <h1>產品售價管理</h1>
+          <p>請使用 Supabase 帳號登入。</p>
+          <p class="login-error hidden" id="authError"></p>
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            密碼
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary-button" type="submit">登入</button>
+        </form>
+      </section>
+    </main>
+
+    <main class="app-shell hidden" id="appShell">
       <header class="topbar">
         <div>
           <h1>產品售價管理</h1>
@@ -22,9 +41,7 @@
           </label>
           <input id="importFile" type="file" accept="application/json" hidden />
           <button class="primary-button" id="addProductBtn">新增產品</button>
-          <form class="logout-form" method="post" action="/logout">
-            <button class="secondary-button" type="submit">登出</button>
-          </form>
+          <button class="secondary-button" id="logoutBtn" type="button">登出</button>
         </div>
       </header>
 
@@ -231,6 +248,8 @@
       </button>
     </template>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./supabase-config.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

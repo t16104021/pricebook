@@ -1,5 +1,5 @@
 const STORAGE_KEY = "pricing-manager-data-v1";
-const API_DATA_PATH = "/api/data";
+const DATA_ROW_ID = "main";
 
 const seedData = {
   products: [
@@ -61,13 +61,20 @@ const seedData = {
   ],
 };
 
-let data = loadData();
+let data = loadLocalData();
 let selectedProductId = data.products[0]?.id ?? null;
 let query = "";
 let timelineMode = "all";
-let databaseMode = false;
+let dbClient = null;
+let isCloudReady = false;
+let saveTimer = null;
 
 const els = {
+  authShell: document.querySelector("#authShell"),
+  appShell: document.querySelector("#appShell"),
+  authForm: document.querySelector("#authForm"),
+  authError: document.querySelector("#authError"),
+  logoutBtn: document.querySelector("#logoutBtn"),
   commandInput: document.querySelector("#commandInput"),
   quickFilters: document.querySelector("#quickFilters"),
   productList: document.querySelector("#productList"),
@@ -103,7 +110,15 @@ const els = {
   productItemTemplate: document.querySelector("#productItemTemplate"),
 };
 
-function loadData() {
+function hasSupabaseConfig() {
+  return Boolean(
+    window.PRICEBOOK_SUPABASE?.url &&
+      window.PRICEBOOK_SUPABASE?.anonKey &&
+      !window.PRICEBOOK_SUPABASE.url.includes("YOUR_SUPABASE"),
+  );
+}
+
+function loadLocalData() {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (!stored) return structuredClone(seedData);
 
@@ -115,53 +130,103 @@ function loadData() {
   }
 }
 
-function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
-  if (databaseMode) {
-    saveDataToServer();
+function showAuth(message = "") {
+  els.authShell.classList.remove("hidden");
+  els.appShell.classList.add("hidden");
+  els.authError.textContent = message;
+  els.authError.classList.toggle("hidden", !message);
+}
+
+function showApp() {
+  els.authShell.classList.add("hidden");
+  els.appShell.classList.remove("hidden");
+}
+
+function initSupabase() {
+  if (!hasSupabaseConfig() || !window.supabase) {
+    showAuth("尚未設定 Supabase。請先依照 SUPABASE.md 建立專案並填入 supabase-config.js。");
+    return;
   }
+
+  dbClient = window.supabase.createClient(window.PRICEBOOK_SUPABASE.url, window.PRICEBOOK_SUPABASE.anonKey);
 }
 
 async function initDataSource() {
-  if (window.location.protocol === "file:") return;
+  initSupabase();
+  if (!dbClient) return;
 
-  try {
-    const response = await fetch(API_DATA_PATH);
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!response.ok) return;
+  const { data: sessionData } = await dbClient.auth.getSession();
+  if (!sessionData.session) {
+    showAuth();
+    return;
+  }
 
-    const serverData = await response.json();
-    if (!Array.isArray(serverData.products)) return;
+  await loadCloudData();
+  showApp();
+  render();
+}
 
-    databaseMode = true;
-    data = serverData;
-    selectedProductId = data.products[0]?.id ?? null;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
-    render();
-  } catch {
-    databaseMode = false;
+async function loadCloudData() {
+  const { data: row, error } = await dbClient
+    .from("pricebook_data")
+    .select("payload")
+    .eq("id", DATA_ROW_ID)
+    .maybeSingle();
+
+  if (error) {
+    showAuth(`讀取資料庫失敗：${error.message}`);
+    return;
+  }
+
+  if (!row?.payload) {
+    await saveCloudData(true);
+    isCloudReady = true;
+    return;
+  }
+
+  data = row.payload;
+  selectedProductId = data.products[0]?.id ?? null;
+  isCloudReady = true;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
+  if (!isCloudReady) return;
+
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveCloudData(), 250);
+}
+
+async function saveCloudData(force = false) {
+  if (!dbClient || (!isCloudReady && !force)) return;
+
+  const { error } = await dbClient.from("pricebook_data").upsert({
+    id: DATA_ROW_ID,
+    payload: data,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    alert(`雲端儲存失敗：${error.message}`);
   }
 }
 
-async function saveDataToServer() {
-  try {
-    const response = await fetch(API_DATA_PATH, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!response.ok) throw new Error("Database save failed");
-  } catch {
-    alert("資料庫儲存失敗，請確認伺服器是否仍在執行。");
+async function signIn(email, password) {
+  const { error } = await dbClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    showAuth(`登入失敗：${error.message}`);
+    return;
   }
+
+  await loadCloudData();
+  showApp();
+  render();
+}
+
+async function signOut() {
+  if (dbClient) await dbClient.auth.signOut();
+  showAuth();
 }
 
 function currency(value) {
@@ -233,14 +298,8 @@ function productMatches(product, parsed) {
     return newest >= offsetDate(-30) && haystack.includes(parsed.term);
   }
 
-  if (parsed.command === "product") {
-    return `${product.sku} ${product.name} ${product.category}`.toLowerCase().includes(parsed.term);
-  }
-
-  if (parsed.command === "customer") {
-    return customerText.toLowerCase().includes(parsed.term);
-  }
-
+  if (parsed.command === "product") return `${product.sku} ${product.name} ${product.category}`.toLowerCase().includes(parsed.term);
+  if (parsed.command === "customer") return customerText.toLowerCase().includes(parsed.term);
   if (parsed.command === "history") {
     const timelineText = buildTimeline(product)
       .map((item) => `${item.date} ${item.label} ${item.note} ${item.price}`)
@@ -248,10 +307,7 @@ function productMatches(product, parsed) {
       .toLowerCase();
     return timelineText.includes(parsed.term);
   }
-
-  if (parsed.command === "price") {
-    return String(currentBase.price).includes(parsed.term);
-  }
+  if (parsed.command === "price") return String(currentBase.price).includes(parsed.term);
 
   return haystack.includes(parsed.term);
 }
@@ -300,8 +356,7 @@ function renderSummary() {
   els.customerCount.textContent = customers.length;
   els.priceCount.textContent = priceCount;
   els.lastUpdated.textContent = formatDate(latestDate);
-  els.dataSource.textContent = databaseMode ? "SQLite" : "離線";
-
+  els.dataSource.textContent = isCloudReady ? "Supabase" : "離線";
   els.customerOptions.innerHTML = customers.map((customer) => `<option value="${escapeHtml(customer)}"></option>`).join("");
 }
 
@@ -458,19 +513,12 @@ function openSaleDialog(customer = "", price = "") {
 
 function addProductFromForm() {
   const form = els.productForm.elements;
-  const sku = form.sku.value.trim();
   const product = {
     id: `p-${crypto.randomUUID()}`,
-    sku,
+    sku: form.sku.value.trim(),
     name: form.name.value.trim(),
     category: form.category.value.trim(),
-    basePrices: [
-      {
-        price: Number(form.price.value),
-        date: form.date.value,
-        note: "初始定價",
-      },
-    ],
+    basePrices: [{ price: Number(form.price.value), date: form.date.value, note: "初始定價" }],
     sales: [],
   };
 
@@ -541,6 +589,18 @@ function importData(file) {
   });
   reader.readAsText(file);
 }
+
+els.authForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!dbClient) {
+    showAuth("Supabase 尚未設定完成。");
+    return;
+  }
+  const form = event.currentTarget.elements;
+  signIn(form.email.value.trim(), form.password.value);
+});
+
+els.logoutBtn.addEventListener("click", signOut);
 
 els.commandInput.addEventListener("input", (event) => {
   query = event.target.value;
