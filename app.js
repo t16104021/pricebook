@@ -108,6 +108,9 @@ const els = {
   basePriceForm: document.querySelector("#basePriceForm"),
   saleDialog: document.querySelector("#saleDialog"),
   saleForm: document.querySelector("#saleForm"),
+  resetPasswordDialog: document.querySelector("#resetPasswordDialog"),
+  resetPasswordForm: document.querySelector("#resetPasswordForm"),
+  resetPasswordError: document.querySelector("#resetPasswordError"),
   productItemTemplate: document.querySelector("#productItemTemplate"),
 };
 
@@ -170,6 +173,11 @@ function initSupabase() {
   }
 
   dbClient = window.supabase.createClient(window.PRICEBOOK_SUPABASE.url, window.PRICEBOOK_SUPABASE.anonKey);
+  dbClient.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") {
+      openResetPasswordDialog();
+    }
+  });
 }
 
 async function initDataSource() {
@@ -274,6 +282,35 @@ async function signIn(email, password) {
 async function signOut() {
   if (dbClient) await dbClient.auth.signOut();
   showAuth();
+}
+
+function openResetPasswordDialog() {
+  els.resetPasswordForm.reset();
+  els.resetPasswordError.classList.add("hidden");
+  if (!els.resetPasswordDialog.open) {
+    els.resetPasswordDialog.showModal();
+  }
+}
+
+async function updateRecoveredPassword() {
+  const form = els.resetPasswordForm.elements;
+  const password = form.password.value;
+  const confirmPassword = form.confirmPassword.value;
+
+  if (password !== confirmPassword) {
+    els.resetPasswordError.textContent = "兩次輸入的新密碼不一致。";
+    els.resetPasswordError.classList.remove("hidden");
+    return false;
+  }
+
+  const { error } = await dbClient.auth.updateUser({ password });
+  if (error) {
+    els.resetPasswordError.textContent = `更新密碼失敗：${error.message}`;
+    els.resetPasswordError.classList.remove("hidden");
+    return false;
+  }
+
+  return true;
 }
 
 function currency(value) {
@@ -699,6 +736,22 @@ els.basePriceDialog.addEventListener("close", () => {
 
 els.saleDialog.addEventListener("close", () => {
   if (els.saleDialog.returnValue === "confirm") updateSaleFromForm();
+});
+
+els.resetPasswordDialog.addEventListener("close", async () => {
+  if (els.resetPasswordDialog.returnValue !== "confirm") return;
+
+  const updated = await updateRecoveredPassword();
+  if (!updated) {
+    requestAnimationFrame(() => els.resetPasswordDialog.showModal());
+    return;
+  }
+
+  const loaded = await loadCloudData();
+  if (loaded) {
+    showApp();
+    render();
+  }
 });
 
 render();

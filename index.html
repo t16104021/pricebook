@@ -243,6 +243,26 @@
       </form>
     </dialog>
 
+    <dialog id="resetPasswordDialog">
+      <form method="dialog" id="resetPasswordForm">
+        <h2>設定新密碼</h2>
+        <p class="dialog-note">請輸入新密碼完成重設。</p>
+        <p class="login-error hidden" id="resetPasswordError"></p>
+        <label>
+          新密碼
+          <input name="password" type="password" autocomplete="new-password" minlength="6" required />
+        </label>
+        <label>
+          確認新密碼
+          <input name="confirmPassword" type="password" autocomplete="new-password" minlength="6" required />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">更新密碼</button>
+        </div>
+      </form>
+    </dialog>
+
     <template id="productItemTemplate">
       <button class="product-item">
         <span class="item-main">
@@ -255,6 +275,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./supabase-config.js?v=20260625-1"></script>
-    <script src="./app.js?v=20260625-3"></script>
+    <script src="./app.js?v=20260625-4"></script>
   </body>
 </html>
