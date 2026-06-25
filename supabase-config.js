@@ -1,4 +1,4 @@
 window.PRICEBOOK_SUPABASE = {
-  url: "YOUR_SUPABASE_PROJECT_URL",
-  anonKey: "YOUR_SUPABASE_ANON_KEY",
+  url: "https://fuhzrbbyqoojjguiuijf.supabase.co",
+  anonKey: "sb_publishable_62pn7Pl87NMncysAAYtI0w_2BakiFd0",
 };
