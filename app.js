@@ -875,17 +875,83 @@ function updateSaleFromForm() {
   render();
 }
 
+function ensureExcelReady() {
+  if (window.XLSX) return true;
+  alert("Excel 功能尚未載入完成，請重新整理頁面後再試一次。");
+  return false;
+}
+
+function productRows() {
+  return data.products.map((product) => ({
+    product_id: product.id,
+    SKU: product.sku,
+    產品名稱: product.name,
+    分類: product.category,
+  }));
+}
+
+function basePriceRows() {
+  return data.products.flatMap((product) =>
+    product.basePrices.map((entry) => ({
+      product_id: product.id,
+      SKU: product.sku,
+      生效日期: entry.date,
+      產品定價: Number(entry.price),
+      備註: entry.note || "",
+    })),
+  );
+}
+
+function salePriceRows() {
+  return data.products.flatMap((product) =>
+    product.sales.flatMap((sale) =>
+      sale.prices.map((entry) => ({
+        product_id: product.id,
+        SKU: product.sku,
+        客戶: sale.customer,
+        生效日期: entry.date,
+        客戶售價: Number(entry.price),
+        備註: entry.note || "",
+      })),
+    ),
+  );
+}
+
+function appendSheet(workbook, name, rows, headers) {
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
+  worksheet["!cols"] = headers.map((header) => ({ wch: Math.max(12, header.length * 2 + 4) }));
+  XLSX.utils.book_append_sheet(workbook, worksheet, name);
+}
+
 function exportData() {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `product-prices-${today()}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  if (!ensureExcelReady()) return;
+
+  const workbook = XLSX.utils.book_new();
+  appendSheet(workbook, "產品", productRows(), ["product_id", "SKU", "產品名稱", "分類"]);
+  appendSheet(workbook, "產品定價", basePriceRows(), ["product_id", "SKU", "生效日期", "產品定價", "備註"]);
+  appendSheet(workbook, "客戶售價", salePriceRows(), ["product_id", "SKU", "客戶", "生效日期", "客戶售價", "備註"]);
+  appendSheet(
+    workbook,
+    "使用說明",
+    [
+      { 項目: "匯入方式", 說明: "可直接編輯此 Excel 後匯入。匯入會以整份 Excel 取代目前資料。" },
+      { 項目: "新增產品", 說明: "在「產品」填 SKU、產品名稱、分類；product_id 可留空，系統會自動建立。" },
+      { 項目: "新增產品定價", 說明: "在「產品定價」填 SKU、生效日期、產品定價、備註。日期格式建議 yyyy-mm-dd。" },
+      { 項目: "新增客戶售價", 說明: "在「客戶售價」填 SKU、客戶、生效日期、客戶售價、備註。日期格式建議 yyyy-mm-dd。" },
+      { 項目: "對應規則", 說明: "product_id 優先，其次用 SKU 對應產品。大量輸入時請保持 SKU 唯一。" },
+    ],
+    ["項目", "說明"],
+  );
+
+  XLSX.writeFile(workbook, `product-prices-${today()}.xlsx`);
 }
 
 function importData(file) {
+  if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+    importExcelData(file);
+    return;
+  }
+
   const reader = new FileReader();
   reader.addEventListener("load", () => {
     try {
@@ -900,6 +966,153 @@ function importData(file) {
     }
   });
   reader.readAsText(file);
+}
+
+function normalizeHeader(value) {
+  return String(value || "").trim();
+}
+
+function rowValue(row, names) {
+  for (const name of names) {
+    const value = row[name];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return "";
+}
+
+function normalizeDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const normalized = text.replaceAll("/", "-").replaceAll(".", "-");
+  const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) {
+    return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return text;
+}
+
+function normalizePrice(value) {
+  const number = Number(String(value || "").replaceAll(",", "").trim());
+  return Number.isFinite(number) ? number : 0;
+}
+
+function makeProductId(sku) {
+  const cleanSku = String(sku || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `p-${cleanSku || crypto.randomUUID()}`;
+}
+
+function sheetRows(workbook, sheetName) {
+  const worksheet = workbook.Sheets[sheetName];
+  if (!worksheet) return [];
+  return XLSX.utils
+    .sheet_to_json(worksheet, { defval: "", raw: false })
+    .map((row) =>
+      Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeHeader(key), value])),
+    );
+}
+
+function workbookToData(workbook) {
+  const productsByKey = new Map();
+  const products = [];
+
+  sheetRows(workbook, "產品").forEach((row) => {
+    const sku = String(rowValue(row, ["SKU", "sku"])).trim();
+    const name = String(rowValue(row, ["產品名稱", "name"])).trim();
+    if (!sku || !name) return;
+
+    const id = String(rowValue(row, ["product_id", "產品ID", "id"])).trim() || makeProductId(sku);
+    const product = {
+      id,
+      sku,
+      name,
+      category: String(rowValue(row, ["分類", "category"])).trim() || "未分類",
+      basePrices: [],
+      sales: [],
+    };
+
+    products.push(product);
+    productsByKey.set(id, product);
+    productsByKey.set(sku, product);
+  });
+
+  function findProduct(row) {
+    const id = String(rowValue(row, ["product_id", "產品ID", "id"])).trim();
+    const sku = String(rowValue(row, ["SKU", "sku"])).trim();
+    return productsByKey.get(id) || productsByKey.get(sku);
+  }
+
+  sheetRows(workbook, "產品定價").forEach((row) => {
+    const product = findProduct(row);
+    const date = normalizeDate(rowValue(row, ["生效日期", "date"]));
+    const price = normalizePrice(rowValue(row, ["產品定價", "price", "定價"]));
+    if (!product || !date) return;
+
+    product.basePrices.push({
+      price,
+      date,
+      note: String(rowValue(row, ["備註", "note"])).trim() || "定價更新",
+    });
+  });
+
+  sheetRows(workbook, "客戶售價").forEach((row) => {
+    const product = findProduct(row);
+    const customer = String(rowValue(row, ["客戶", "customer"])).trim();
+    const date = normalizeDate(rowValue(row, ["生效日期", "date"]));
+    const price = normalizePrice(rowValue(row, ["客戶售價", "price", "售價"]));
+    if (!product || !customer || !date) return;
+
+    let sale = product.sales.find((item) => item.customer === customer);
+    if (!sale) {
+      sale = { customer, prices: [] };
+      product.sales.push(sale);
+    }
+
+    sale.prices.push({
+      price,
+      date,
+      note: String(rowValue(row, ["備註", "note"])).trim() || "客戶售價更新",
+    });
+  });
+
+  products.forEach((product) => {
+    product.basePrices.sort((a, b) => a.date.localeCompare(b.date));
+    product.sales.forEach((sale) => sale.prices.sort((a, b) => a.date.localeCompare(b.date)));
+    if (!product.basePrices.length) {
+      product.basePrices.push({ price: 0, date: today(), note: "匯入時未提供定價" });
+    }
+  });
+
+  if (!products.length) throw new Error("Missing products");
+  return { products };
+}
+
+function importExcelData(file) {
+  if (!ensureExcelReady()) return;
+
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    try {
+      const workbook = XLSX.read(reader.result, { type: "array", cellDates: true });
+      data = workbookToData(workbook);
+      selectedProductId = data.products[0]?.id ?? null;
+      saveData();
+      render();
+    } catch {
+      alert("匯入失敗，請確認 Excel 內含「產品」、「產品定價」、「客戶售價」工作表，且必要欄位已填寫。");
+    }
+  });
+  reader.readAsArrayBuffer(file);
 }
 
 els.authForm.addEventListener("submit", (event) => {

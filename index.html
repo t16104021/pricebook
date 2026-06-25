@@ -9,7 +9,7 @@
         window.location.href = "https://t16104021.github.io/pricebook/";
       }
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260625-7" />
+    <link rel="stylesheet" href="./styles.css?v=20260625-8" />
   </head>
   <body>
     <main class="login-page" id="authShell">
@@ -38,13 +38,13 @@
           <p>追蹤產品定價、客戶售價與每一次價格異動</p>
         </div>
         <div class="top-actions">
-          <button class="icon-button" id="exportBtn" title="匯出資料" aria-label="匯出資料">
+          <button class="icon-button" id="exportBtn" title="匯出 Excel" aria-label="匯出 Excel">
             <span aria-hidden="true">⇩</span>
           </button>
-          <label class="icon-button" for="importFile" title="匯入資料" aria-label="匯入資料">
+          <label class="icon-button" for="importFile" title="匯入 Excel 或 JSON" aria-label="匯入 Excel 或 JSON">
             <span aria-hidden="true">⇧</span>
           </label>
-          <input id="importFile" type="file" accept="application/json" hidden />
+          <input id="importFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/json" hidden />
           <button class="primary-button" id="addProductBtn">新增產品</button>
           <button class="secondary-button" id="logoutBtn" type="button">登出</button>
         </div>
@@ -366,7 +366,8 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./vendor/xlsx.full.min.js?v=0.18.5"></script>
     <script src="./supabase-config.js?v=20260625-1"></script>
-    <script src="./app.js?v=20260625-10"></script>
+    <script src="./app.js?v=20260625-11"></script>
   </body>
 </html>
