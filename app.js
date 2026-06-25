@@ -176,15 +176,21 @@ async function initDataSource() {
   initSupabase();
   if (!dbClient) return;
 
-  const { data: sessionData } = await dbClient.auth.getSession();
+  const { data: sessionData, error } = await dbClient.auth.getSession();
+  if (error) {
+    showAuth(`讀取登入狀態失敗：${error.message}`);
+    return;
+  }
   if (!sessionData.session) {
     showAuth();
     return;
   }
 
-  await loadCloudData();
-  showApp();
-  render();
+  const loaded = await loadCloudData();
+  if (loaded) {
+    showApp();
+    render();
+  }
 }
 
 async function loadCloudData() {
@@ -196,19 +202,21 @@ async function loadCloudData() {
 
   if (error) {
     showAuth(`讀取資料庫失敗：${error.message}`);
-    return;
+    return false;
   }
 
   if (!row?.payload) {
-    await saveCloudData(true);
+    const saved = await saveCloudData(true);
+    if (!saved) return false;
     isCloudReady = true;
-    return;
+    return true;
   }
 
   data = row.payload;
   selectedProductId = data.products[0]?.id ?? null;
   isCloudReady = true;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
+  return true;
 }
 
 function saveData() {
@@ -220,7 +228,7 @@ function saveData() {
 }
 
 async function saveCloudData(force = false) {
-  if (!dbClient || (!isCloudReady && !force)) return;
+  if (!dbClient || (!isCloudReady && !force)) return false;
 
   const { error } = await dbClient.from("pricebook_data").upsert({
     id: DATA_ROW_ID,
@@ -229,8 +237,13 @@ async function saveCloudData(force = false) {
   });
 
   if (error) {
-    alert(`雲端儲存失敗：${error.message}`);
+    const message = `雲端儲存失敗：${error.message}`;
+    if (force) showAuth(message);
+    else alert(message);
+    return false;
   }
+
+  return true;
 }
 
 async function signIn(email, password) {
@@ -245,9 +258,11 @@ async function signIn(email, password) {
       return;
     }
 
-    await loadCloudData();
-    showApp();
-    render();
+    const loaded = await loadCloudData();
+    if (loaded) {
+      showApp();
+      render();
+    }
   } catch (error) {
     showAuth(authMessage(error));
   } finally {
