@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>產品售價管理</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>產品售價管理</h1>
+          <p>追蹤產品定價、客戶售價與每一次價格異動</p>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="exportBtn" title="匯出資料" aria-label="匯出資料">
+            <span aria-hidden="true">⇩</span>
+          </button>
+          <label class="icon-button" for="importFile" title="匯入資料" aria-label="匯入資料">
+            <span aria-hidden="true">⇧</span>
+          </label>
+          <input id="importFile" type="file" accept="application/json" hidden />
+          <button class="primary-button" id="addProductBtn">新增產品</button>
+          <form class="logout-form" method="post" action="/logout">
+            <button class="secondary-button" type="submit">登出</button>
+          </form>
+        </div>
+      </header>
+
+      <section class="command-band">
+        <div class="command-box">
+          <span class="command-prefix">⌘K</span>
+          <input
+            id="commandInput"
+            type="search"
+            autocomplete="off"
+            placeholder="輸入指令：/product、/customer、/history、/changed，或直接搜尋品名、SKU、客戶"
+          />
+        </div>
+        <div class="quick-filters" id="quickFilters" aria-label="快速篩選">
+          <button data-command="">全部</button>
+          <button data-command="/changed">近期異動</button>
+          <button data-command="/history">歷史紀錄</button>
+          <button data-command="/customer ">客戶</button>
+        </div>
+      </section>
+
+      <section class="summary-grid" aria-label="總覽">
+        <article>
+          <span>產品數</span>
+          <strong id="productCount">0</strong>
+        </article>
+        <article>
+          <span>客戶數</span>
+          <strong id="customerCount">0</strong>
+        </article>
+        <article>
+          <span>售價筆數</span>
+          <strong id="priceCount">0</strong>
+        </article>
+        <article>
+          <span>最近更新</span>
+          <strong id="lastUpdated">-</strong>
+        </article>
+        <article>
+          <span>資料來源</span>
+          <strong id="dataSource">離線</strong>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <aside class="product-panel" aria-label="產品清單">
+          <div class="panel-header">
+            <h2>產品名單</h2>
+            <span id="resultCount">0 筆</span>
+          </div>
+          <div class="product-list" id="productList"></div>
+        </aside>
+
+        <section class="detail-panel" aria-live="polite">
+          <div class="empty-state" id="emptyState">
+            <h2>選擇產品查看價格</h2>
+            <p>可用指令快速定位產品、客戶或某個時間點的價格紀錄。</p>
+          </div>
+
+          <div class="detail-content hidden" id="detailContent">
+            <div class="detail-header">
+              <div>
+                <span class="sku" id="detailSku"></span>
+                <h2 id="detailName"></h2>
+                <p id="detailMeta"></p>
+              </div>
+              <button class="secondary-button" id="updateBaseBtn">更新定價</button>
+            </div>
+
+            <div class="price-strip">
+              <div>
+                <span>目前產品定價</span>
+                <strong id="detailBasePrice"></strong>
+              </div>
+              <div>
+                <span>定價生效日</span>
+                <strong id="detailBaseDate"></strong>
+              </div>
+              <div>
+                <span>客戶售價範圍</span>
+                <strong id="detailRange"></strong>
+              </div>
+            </div>
+
+            <div class="section-heading">
+              <h3>客戶售價</h3>
+              <button class="primary-button compact" id="addSaleBtn">新增售價</button>
+            </div>
+            <div class="customer-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>客戶</th>
+                    <th>目前售價</th>
+                    <th>生效日</th>
+                    <th>毛利差</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="salesTable"></tbody>
+              </table>
+            </div>
+
+            <div class="section-heading timeline-heading">
+              <h3>時間軸</h3>
+              <div class="segmented" id="timelineMode">
+                <button class="active" data-mode="all">全部</button>
+                <button data-mode="base">定價</button>
+                <button data-mode="sale">客戶</button>
+              </div>
+            </div>
+            <div class="timeline" id="timeline"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="productDialog">
+      <form method="dialog" id="productForm">
+        <h2>新增產品</h2>
+        <label>
+          SKU
+          <input name="sku" required placeholder="P-1001" />
+        </label>
+        <label>
+          產品名稱
+          <input name="name" required placeholder="高效能濾芯" />
+        </label>
+        <label>
+          分類
+          <input name="category" required placeholder="耗材" />
+        </label>
+        <label>
+          產品定價
+          <input name="price" type="number" min="0" step="1" required />
+        </label>
+        <label>
+          生效日期
+          <input name="date" type="date" required />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">建立</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="basePriceDialog">
+      <form method="dialog" id="basePriceForm">
+        <h2>更新產品定價</h2>
+        <label>
+          新定價
+          <input name="price" type="number" min="0" step="1" required />
+        </label>
+        <label>
+          生效日期
+          <input name="date" type="date" required />
+        </label>
+        <label>
+          備註
+          <input name="note" placeholder="例：原料成本調整" />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">更新</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="saleDialog">
+      <form method="dialog" id="saleForm">
+        <h2>新增或更新客戶售價</h2>
+        <label>
+          客戶
+          <input name="customer" list="customerOptions" required placeholder="長青商行" />
+          <datalist id="customerOptions"></datalist>
+        </label>
+        <label>
+          售價
+          <input name="price" type="number" min="0" step="1" required />
+        </label>
+        <label>
+          生效日期
+          <input name="date" type="date" required />
+        </label>
+        <label>
+          備註
+          <input name="note" placeholder="例：年度合約價" />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="productItemTemplate">
+      <button class="product-item">
+        <span class="item-main">
+          <strong></strong>
+          <small></small>
+        </span>
+        <span class="item-price"></span>
+      </button>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
