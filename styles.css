@@ -499,7 +499,36 @@ th:last-child {
   margin-top: 12px;
 }
 
+.timeline-swipe {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--danger);
+}
+
+.timeline-delete-action {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  padding: 0 22px;
+  background: var(--danger);
+  color: white;
+  font-weight: 800;
+}
+
+.timeline-delete-action::before {
+  content: "刪除";
+}
+
+.timeline-swipe.ready-delete .timeline-delete-action {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+}
+
 .timeline-item {
+  position: relative;
   display: grid;
   grid-template-columns: 120px 1fr auto;
   gap: 12px;
@@ -507,6 +536,16 @@ th:last-child {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
+  background: var(--surface);
+  touch-action: pan-y;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease;
+}
+
+.timeline-item.dragging {
+  transition: none;
+  border-color: var(--danger);
 }
 
 .timeline-date {

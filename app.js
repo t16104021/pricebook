@@ -69,6 +69,7 @@ let timelineSort = "desc";
 let timelineStart = "";
 let timelineEnd = "";
 let timelineCustomerSearch = "";
+let timelineDeleteTarget = null;
 let customerSearch = "";
 let customerInitial = "all";
 let customerPage = 1;
@@ -131,6 +132,9 @@ const els = {
   deleteProductDialog: document.querySelector("#deleteProductDialog"),
   deleteProductForm: document.querySelector("#deleteProductForm"),
   deleteProductMessage: document.querySelector("#deleteProductMessage"),
+  deleteTimelineDialog: document.querySelector("#deleteTimelineDialog"),
+  deleteTimelineForm: document.querySelector("#deleteTimelineForm"),
+  deleteTimelineMessage: document.querySelector("#deleteTimelineMessage"),
   basePriceDialog: document.querySelector("#basePriceDialog"),
   basePriceForm: document.querySelector("#basePriceForm"),
   saleDialog: document.querySelector("#saleDialog"),
@@ -439,21 +443,24 @@ function getFilteredProducts() {
 }
 
 function buildTimeline(product) {
-  const baseItems = product.basePrices.map((entry) => ({
+  const baseItems = product.basePrices.map((entry, priceIndex) => ({
     type: "base",
     date: entry.date,
     label: "產品定價",
     price: entry.price,
     note: entry.note || "定價更新",
+    priceIndex,
   }));
 
-  const saleItems = product.sales.flatMap((sale) =>
-    sale.prices.map((entry) => ({
+  const saleItems = product.sales.flatMap((sale, saleIndex) =>
+    sale.prices.map((entry, priceIndex) => ({
       type: "sale",
       date: entry.date,
       label: sale.customer,
       price: entry.price,
       note: entry.note || "客戶售價更新",
+      saleIndex,
+      priceIndex,
     })),
   );
 
@@ -618,17 +625,82 @@ function renderTimeline(product) {
 
   items.forEach((item) => {
     const row = document.createElement("article");
-    row.className = "timeline-item";
+    row.className = "timeline-swipe";
     row.innerHTML = `
-      <div class="timeline-date">${formatDate(item.date)}</div>
-      <div class="timeline-body">
-        <strong>${escapeHtml(item.label)} · ${currency(item.price)}</strong>
-        <span>${escapeHtml(item.note)}</span>
+      <button class="timeline-delete-action" type="button" aria-label="刪除這筆時間紀錄">刪除</button>
+      <div class="timeline-item">
+        <div class="timeline-date">${formatDate(item.date)}</div>
+        <div class="timeline-body">
+          <strong>${escapeHtml(item.label)} · ${currency(item.price)}</strong>
+          <span>${escapeHtml(item.note)}</span>
+        </div>
+        <span class="badge ${item.type === "sale" ? "sale" : ""}">${item.type === "sale" ? "客戶售價" : "產品定價"}</span>
       </div>
-      <span class="badge ${item.type === "sale" ? "sale" : ""}">${item.type === "sale" ? "客戶售價" : "產品定價"}</span>
     `;
+    addTimelineSwipe(row, item);
+    row.querySelector(".timeline-delete-action").addEventListener("click", () => openDeleteTimelineDialog(item));
     els.timeline.append(row);
   });
+}
+
+function addTimelineSwipe(row, item) {
+  const content = row.querySelector(".timeline-item");
+  const threshold = 72;
+  let startX = 0;
+  let currentX = 0;
+  let isDragging = false;
+  let openedBySwipe = false;
+
+  content.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    startX = event.clientX;
+    currentX = 0;
+    isDragging = true;
+    content.setPointerCapture(event.pointerId);
+    content.classList.add("dragging");
+  });
+
+  content.addEventListener("pointermove", (event) => {
+    if (!isDragging) return;
+    currentX = Math.max(-96, Math.min(96, event.clientX - startX));
+    content.style.transform = `translateX(${currentX}px)`;
+  });
+
+  content.addEventListener("pointerup", (event) => {
+    if (!isDragging) return;
+    isDragging = false;
+    content.releasePointerCapture(event.pointerId);
+    content.classList.remove("dragging");
+
+    if (Math.abs(currentX) >= threshold) {
+      row.classList.add("ready-delete");
+      content.style.transform = `translateX(${currentX > 0 ? 86 : -86}px)`;
+      openedBySwipe = true;
+      return;
+    }
+
+    row.classList.remove("ready-delete");
+    content.style.transform = "";
+  });
+
+  content.addEventListener("pointercancel", () => {
+    isDragging = false;
+    content.classList.remove("dragging");
+    row.classList.remove("ready-delete");
+    content.style.transform = "";
+  });
+
+  content.addEventListener("click", () => {
+    if (openedBySwipe) {
+      openedBySwipe = false;
+      return;
+    }
+    if (!row.classList.contains("ready-delete")) return;
+    row.classList.remove("ready-delete");
+    content.style.transform = "";
+  });
+
+  row.dataset.timelineType = item.type;
 }
 
 function setQuickFilterState() {
@@ -734,6 +806,36 @@ function deleteSelectedProduct() {
   const productIndex = data.products.findIndex((item) => item.id === product.id);
   data.products = data.products.filter((item) => item.id !== product.id);
   selectedProductId = data.products[Math.min(productIndex, data.products.length - 1)]?.id ?? null;
+  saveData();
+  render();
+}
+
+function openDeleteTimelineDialog(item) {
+  timelineDeleteTarget = item;
+  const typeLabel = item.type === "sale" ? `客戶售價「${item.label}」` : "產品定價";
+  els.deleteTimelineMessage.textContent = `確定要刪除 ${formatDate(item.date)} 的${typeLabel} ${currency(item.price)} 嗎？此操作會從時間軸和價格紀錄中移除。`;
+  els.deleteTimelineDialog.showModal();
+}
+
+function deleteTimelineTarget() {
+  const product = getSelectedProduct();
+  if (!product || !timelineDeleteTarget) return;
+
+  if (timelineDeleteTarget.type === "base") {
+    product.basePrices.splice(timelineDeleteTarget.priceIndex, 1);
+  }
+
+  if (timelineDeleteTarget.type === "sale") {
+    const sale = product.sales[timelineDeleteTarget.saleIndex];
+    if (sale) {
+      sale.prices.splice(timelineDeleteTarget.priceIndex, 1);
+      if (!sale.prices.length) {
+        product.sales.splice(timelineDeleteTarget.saleIndex, 1);
+      }
+    }
+  }
+
+  timelineDeleteTarget = null;
   saveData();
   render();
 }
@@ -925,6 +1027,15 @@ els.editProductDialog.addEventListener("close", () => {
 
 els.deleteProductDialog.addEventListener("close", () => {
   if (els.deleteProductDialog.returnValue === "confirm") deleteSelectedProduct();
+});
+
+els.deleteTimelineDialog.addEventListener("close", () => {
+  if (els.deleteTimelineDialog.returnValue === "confirm") {
+    deleteTimelineTarget();
+    return;
+  }
+
+  timelineDeleteTarget = null;
 });
 
 els.basePriceDialog.addEventListener("close", () => {
