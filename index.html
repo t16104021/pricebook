@@ -9,7 +9,7 @@
         window.location.href = "https://t16104021.github.io/pricebook/";
       }
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260625-2" />
+    <link rel="stylesheet" href="./styles.css?v=20260625-3" />
   </head>
   <body>
     <main class="login-page" id="authShell">
@@ -134,6 +134,15 @@
             <div class="section-heading">
               <h3>客戶售價</h3>
               <button class="primary-button compact" id="addSaleBtn">新增售價</button>
+            </div>
+            <div class="customer-controls">
+              <div class="customer-search">
+                <input id="customerSearch" type="search" autocomplete="off" placeholder="搜尋客戶名稱" />
+              </div>
+              <div class="customer-filter-row">
+                <div class="segmented customer-filter" id="customerInitialFilter"></div>
+                <span id="customerFilterCount">0 筆</span>
+              </div>
             </div>
             <div class="customer-table-wrap">
               <table>
@@ -290,6 +299,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./supabase-config.js?v=20260625-1"></script>
-    <script src="./app.js?v=20260625-5"></script>
+    <script src="./app.js?v=20260625-6"></script>
   </body>
 </html>

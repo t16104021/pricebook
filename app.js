@@ -68,6 +68,8 @@ let timelineMode = "all";
 let timelineSort = "desc";
 let timelineStart = "";
 let timelineEnd = "";
+let customerSearch = "";
+let customerInitial = "all";
 let dbClient = null;
 let isCloudReady = false;
 let saveTimer = null;
@@ -88,6 +90,9 @@ const els = {
   priceCount: document.querySelector("#priceCount"),
   lastUpdated: document.querySelector("#lastUpdated"),
   dataSource: document.querySelector("#dataSource"),
+  customerSearch: document.querySelector("#customerSearch"),
+  customerInitialFilter: document.querySelector("#customerInitialFilter"),
+  customerFilterCount: document.querySelector("#customerFilterCount"),
   emptyState: document.querySelector("#emptyState"),
   detailContent: document.querySelector("#detailContent"),
   detailSku: document.querySelector("#detailSku"),
@@ -357,6 +362,10 @@ function getCustomers() {
   return [...new Set(data.products.flatMap((product) => product.sales.map((sale) => sale.customer)))].sort();
 }
 
+function customerInitialKey(name) {
+  return [...name.trim()][0]?.toUpperCase() || "#";
+}
+
 function getAllDates() {
   return data.products.flatMap((product) => [
     ...product.basePrices.map((price) => price.date),
@@ -506,13 +515,26 @@ function renderDetail() {
 
 function renderSales(product, basePrice) {
   els.salesTable.innerHTML = "";
+  renderCustomerInitialFilter(product);
 
   if (!product.sales.length) {
     els.salesTable.innerHTML = `<tr><td class="empty-row" colspan="5">尚未設定客戶售價</td></tr>`;
+    els.customerFilterCount.textContent = "0 筆";
     return;
   }
 
-  product.sales
+  const filteredSales = product.sales
+    .filter((sale) => !customerSearch || sale.customer.toLowerCase().includes(customerSearch.toLowerCase()))
+    .filter((sale) => customerInitial === "all" || customerInitialKey(sale.customer) === customerInitial);
+
+  els.customerFilterCount.textContent = `${filteredSales.length} / ${product.sales.length} 筆`;
+
+  if (!filteredSales.length) {
+    els.salesTable.innerHTML = `<tr><td class="empty-row" colspan="5">沒有符合條件的客戶售價</td></tr>`;
+    return;
+  }
+
+  filteredSales
     .map((sale) => ({ sale, current: getCurrentSale(sale) }))
     .sort((a, b) => a.sale.customer.localeCompare(b.sale.customer, "zh-Hant"))
     .forEach(({ sale, current }) => {
@@ -528,6 +550,24 @@ function renderSales(product, basePrice) {
       tr.querySelector("button").addEventListener("click", () => openSaleDialog(sale.customer, current.price));
       els.salesTable.append(tr);
     });
+}
+
+function renderCustomerInitialFilter(product) {
+  const initials = [...new Set(product.sales.map((sale) => customerInitialKey(sale.customer)))].sort((a, b) =>
+    a.localeCompare(b, "zh-Hant"),
+  );
+
+  if (customerInitial !== "all" && !initials.includes(customerInitial)) {
+    customerInitial = "all";
+  }
+
+  const buttons = [{ key: "all", label: "全部" }, ...initials.map((initial) => ({ key: initial, label: initial }))];
+  els.customerInitialFilter.innerHTML = buttons
+    .map(
+      (button) =>
+        `<button class="${button.key === customerInitial ? "active" : ""}" data-initial="${escapeHtml(button.key)}">${escapeHtml(button.label)}</button>`,
+    )
+    .join("");
 }
 
 function renderTimeline(product) {
@@ -717,6 +757,18 @@ els.quickFilters.addEventListener("click", (event) => {
   els.commandInput.value = query;
   els.commandInput.focus();
   render();
+});
+
+els.customerSearch.addEventListener("input", (event) => {
+  customerSearch = event.target.value.trim();
+  renderDetail();
+});
+
+els.customerInitialFilter.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  customerInitial = button.dataset.initial;
+  renderDetail();
 });
 
 els.timelineMode.addEventListener("click", (event) => {
