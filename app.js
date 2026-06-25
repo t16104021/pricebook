@@ -1,5 +1,9 @@
 const STORAGE_KEY_PREFIX = "pricing-manager-data-v1";
 
+const emptyData = {
+  products: [],
+};
+
 const seedData = {
   products: [
     {
@@ -251,7 +255,7 @@ async function loadCloudData(userId) {
   }
 
   if (!row?.payload) {
-    data = structuredClone(seedData);
+    data = structuredClone(emptyData);
     selectedProductId = data.products[0]?.id ?? null;
     const saved = await saveCloudData(true);
     if (!saved) return false;
