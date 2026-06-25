@@ -70,6 +70,8 @@ let timelineStart = "";
 let timelineEnd = "";
 let customerSearch = "";
 let customerInitial = "all";
+let customerPage = 1;
+let customerPageSize = 10;
 let dbClient = null;
 let isCloudReady = false;
 let saveTimer = null;
@@ -93,6 +95,10 @@ const els = {
   customerSearch: document.querySelector("#customerSearch"),
   customerInitialFilter: document.querySelector("#customerInitialFilter"),
   customerFilterCount: document.querySelector("#customerFilterCount"),
+  customerPageSize: document.querySelector("#customerPageSize"),
+  customerPrevPage: document.querySelector("#customerPrevPage"),
+  customerNextPage: document.querySelector("#customerNextPage"),
+  customerPageInfo: document.querySelector("#customerPageInfo"),
   emptyState: document.querySelector("#emptyState"),
   detailContent: document.querySelector("#detailContent"),
   detailSku: document.querySelector("#detailSku"),
@@ -520,6 +526,7 @@ function renderSales(product, basePrice) {
   if (!product.sales.length) {
     els.salesTable.innerHTML = `<tr><td class="empty-row" colspan="5">尚未設定客戶售價</td></tr>`;
     els.customerFilterCount.textContent = "0 筆";
+    renderCustomerPagination(1);
     return;
   }
 
@@ -531,25 +538,41 @@ function renderSales(product, basePrice) {
 
   if (!filteredSales.length) {
     els.salesTable.innerHTML = `<tr><td class="empty-row" colspan="5">沒有符合條件的客戶售價</td></tr>`;
+    customerPage = 1;
+    renderCustomerPagination(1);
     return;
   }
 
-  filteredSales
+  const sortedSales = filteredSales
     .map((sale) => ({ sale, current: getCurrentSale(sale) }))
-    .sort((a, b) => a.sale.customer.localeCompare(b.sale.customer, "zh-Hant"))
-    .forEach(({ sale, current }) => {
-      const diff = current.price - basePrice;
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
+    .sort((a, b) => a.sale.customer.localeCompare(b.sale.customer, "zh-Hant"));
+  const pageSize = customerPageSize === "all" ? sortedSales.length : Number(customerPageSize);
+  const totalPages = customerPageSize === "all" ? 1 : Math.max(1, Math.ceil(sortedSales.length / pageSize));
+  customerPage = Math.min(customerPage, totalPages);
+  const pageStart = customerPageSize === "all" ? 0 : (customerPage - 1) * pageSize;
+  const visibleSales = sortedSales.slice(pageStart, pageStart + pageSize);
+
+  renderCustomerPagination(totalPages);
+
+  visibleSales.forEach(({ sale, current }) => {
+    const diff = current.price - basePrice;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
         <td>${escapeHtml(sale.customer)}</td>
         <td><strong>${currency(current.price)}</strong></td>
         <td>${formatDate(current.date)}</td>
         <td class="${diff >= 0 ? "margin-positive" : "margin-negative"}">${diff >= 0 ? "+" : ""}${currency(diff)}</td>
         <td><button class="secondary-button compact" data-customer="${escapeHtml(sale.customer)}">更新</button></td>
       `;
-      tr.querySelector("button").addEventListener("click", () => openSaleDialog(sale.customer, current.price));
-      els.salesTable.append(tr);
-    });
+    tr.querySelector("button").addEventListener("click", () => openSaleDialog(sale.customer, current.price));
+    els.salesTable.append(tr);
+  });
+}
+
+function renderCustomerPagination(totalPages) {
+  els.customerPageInfo.textContent = `第 ${customerPage} / ${totalPages} 頁`;
+  els.customerPrevPage.disabled = customerPage <= 1;
+  els.customerNextPage.disabled = customerPage >= totalPages;
 }
 
 function renderCustomerInitialFilter(product) {
@@ -761,6 +784,7 @@ els.quickFilters.addEventListener("click", (event) => {
 
 els.customerSearch.addEventListener("input", (event) => {
   customerSearch = event.target.value.trim();
+  customerPage = 1;
   renderDetail();
 });
 
@@ -768,6 +792,23 @@ els.customerInitialFilter.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   customerInitial = button.dataset.initial;
+  customerPage = 1;
+  renderDetail();
+});
+
+els.customerPageSize.addEventListener("change", (event) => {
+  customerPageSize = event.target.value === "all" ? "all" : Number(event.target.value);
+  customerPage = 1;
+  renderDetail();
+});
+
+els.customerPrevPage.addEventListener("click", () => {
+  customerPage = Math.max(1, customerPage - 1);
+  renderDetail();
+});
+
+els.customerNextPage.addEventListener("click", () => {
+  customerPage += 1;
   renderDetail();
 });
 

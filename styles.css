@@ -391,6 +391,45 @@ th:last-child {
   white-space: nowrap;
 }
 
+.customer-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.customer-pagination label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.customer-pagination select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: white;
+}
+
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pagination-actions span {
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 .margin-positive {
   color: var(--accent-strong);
   font-weight: 800;
