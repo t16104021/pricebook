@@ -60,6 +60,7 @@ const seedData = {
   ],
 };
 
+let currentUserId = null;
 let data = loadLocalData();
 let selectedProductId = data.products[0]?.id ?? null;
 let query = "";
@@ -74,7 +75,6 @@ let customerInitial = "all";
 let customerPage = 1;
 let customerPageSize = 10;
 let dbClient = null;
-let currentUserId = null;
 let isCloudReady = false;
 let saveTimer = null;
 
