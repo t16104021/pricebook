@@ -68,6 +68,7 @@ let timelineMode = "all";
 let timelineSort = "desc";
 let timelineStart = "";
 let timelineEnd = "";
+let timelineCustomerSearch = "";
 let customerSearch = "";
 let customerInitial = "all";
 let customerPage = 1;
@@ -111,6 +112,7 @@ const els = {
   timeline: document.querySelector("#timeline"),
   timelineMode: document.querySelector("#timelineMode"),
   timelineSort: document.querySelector("#timelineSort"),
+  timelineCustomerSearch: document.querySelector("#timelineCustomerSearch"),
   timelineStart: document.querySelector("#timelineStart"),
   timelineEnd: document.querySelector("#timelineEnd"),
   clearTimelineRange: document.querySelector("#clearTimelineRange"),
@@ -596,6 +598,7 @@ function renderCustomerInitialFilter(product) {
 function renderTimeline(product) {
   const items = buildTimeline(product)
     .filter((item) => timelineMode === "all" || item.type === timelineMode)
+    .filter((item) => !timelineCustomerSearch || (item.type === "sale" && item.label.toLowerCase().includes(timelineCustomerSearch.toLowerCase())))
     .filter((item) => !timelineStart || item.date >= timelineStart)
     .filter((item) => !timelineEnd || item.date <= timelineEnd)
     .sort((a, b) => (timelineSort === "asc" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)));
@@ -825,6 +828,11 @@ els.timelineSort.addEventListener("click", (event) => {
   if (!button) return;
   timelineSort = button.dataset.sort;
   els.timelineSort.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+  renderDetail();
+});
+
+els.timelineCustomerSearch.addEventListener("input", (event) => {
+  timelineCustomerSearch = event.target.value.trim();
   renderDetail();
 });
 

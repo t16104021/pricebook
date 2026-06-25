@@ -469,6 +469,14 @@ th:last-child {
   background: white;
 }
 
+.timeline-customer-search {
+  min-width: min(220px, 100%);
+}
+
+.timeline-customer-search input {
+  width: 100%;
+}
+
 .timeline {
   display: grid;
   gap: 10px;
