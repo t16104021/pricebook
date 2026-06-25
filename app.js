@@ -74,6 +74,7 @@ const els = {
   appShell: document.querySelector("#appShell"),
   authForm: document.querySelector("#authForm"),
   authError: document.querySelector("#authError"),
+  authSubmit: document.querySelector("#authForm button[type='submit']"),
   logoutBtn: document.querySelector("#logoutBtn"),
   commandInput: document.querySelector("#commandInput"),
   quickFilters: document.querySelector("#quickFilters"),
@@ -135,6 +136,26 @@ function showAuth(message = "") {
   els.appShell.classList.add("hidden");
   els.authError.textContent = message;
   els.authError.classList.toggle("hidden", !message);
+}
+
+function authMessage(error) {
+  const message = error?.message || "";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("invalid login credentials")) {
+    return "帳號或密碼錯誤，請確認 Email 和密碼後再試一次。";
+  }
+  if (lower.includes("email not confirmed")) {
+    return "這個 Email 尚未完成驗證，請先到 Supabase 確認使用者狀態。";
+  }
+  if (lower.includes("too many requests") || lower.includes("rate limit")) {
+    return "登入嘗試太頻繁，請稍等一下再試。";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("network")) {
+    return "連線失敗，請確認網路正常後再試。";
+  }
+
+  return `登入失敗：${message || "發生未知錯誤，請稍後再試。"}`;
 }
 
 function showApp() {
@@ -213,15 +234,26 @@ async function saveCloudData(force = false) {
 }
 
 async function signIn(email, password) {
-  const { error } = await dbClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    showAuth(`登入失敗：${error.message}`);
-    return;
-  }
+  els.authError.classList.add("hidden");
+  els.authSubmit.disabled = true;
+  els.authSubmit.textContent = "登入中";
 
-  await loadCloudData();
-  showApp();
-  render();
+  try {
+    const { error } = await dbClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      showAuth(authMessage(error));
+      return;
+    }
+
+    await loadCloudData();
+    showApp();
+    render();
+  } catch (error) {
+    showAuth(authMessage(error));
+  } finally {
+    els.authSubmit.disabled = false;
+    els.authSubmit.textContent = "登入";
+  }
 }
 
 async function signOut() {
