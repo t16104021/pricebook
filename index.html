@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>產品售價管理</title>
+    <script>
+      if (window.location.protocol === "file:") {
+        window.location.href = "https://t16104021.github.io/pricebook/";
+      }
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=20260625-8" />
+  </head>
+  <body>
+    <main class="login-page" id="authShell">
+      <section class="login-shell">
+        <form class="login-card" id="authForm">
+          <h1>產品售價管理</h1>
+          <p>請使用 Supabase 帳號登入。</p>
+          <p class="login-error hidden" id="authError"></p>
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            密碼
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="primary-button" type="submit">登入</button>
+        </form>
+      </section>
+    </main>
+
+    <main class="app-shell hidden" id="appShell">
+      <header class="topbar">
+        <div>
+          <h1>產品售價管理</h1>
+          <p>追蹤產品定價、客戶售價與每一次價格異動</p>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="exportBtn" title="匯出 Excel" aria-label="匯出 Excel">
+            <span aria-hidden="true">⇩</span>
+          </button>
+          <label class="icon-button" for="importFile" title="匯入 Excel 或 JSON" aria-label="匯入 Excel 或 JSON">
+            <span aria-hidden="true">⇧</span>
+          </label>
+          <input id="importFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/json" hidden />
+          <button class="primary-button" id="addProductBtn">新增產品</button>
+          <button class="secondary-button" id="logoutBtn" type="button">登出</button>
+        </div>
+      </header>
+
+      <section class="command-band">
+        <div class="command-box">
+          <span class="command-prefix">⌘K</span>
+          <input
+            id="commandInput"
+            type="search"
+            autocomplete="off"
+            placeholder="輸入指令：/product、/customer、/history、/changed，或直接搜尋品名、SKU、客戶"
+          />
+        </div>
+        <div class="quick-filters" id="quickFilters" aria-label="快速篩選">
+          <button data-command="">全部</button>
+          <button data-command="/changed">近期異動</button>
+          <button data-command="/history">歷史紀錄</button>
+          <button data-command="/customer ">客戶</button>
+        </div>
+      </section>
+
+      <section class="summary-grid" aria-label="總覽">
+        <article>
+          <span>產品數</span>
+          <strong id="productCount">0</strong>
+        </article>
+        <article>
+          <span>客戶數</span>
+          <strong id="customerCount">0</strong>
+        </article>
+        <article>
+          <span>售價筆數</span>
+          <strong id="priceCount">0</strong>
+        </article>
+        <article>
+          <span>最近更新</span>
+          <strong id="lastUpdated">-</strong>
+        </article>
+        <article>
+          <span>資料來源</span>
+          <strong id="dataSource">離線</strong>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <aside class="product-panel" aria-label="產品清單">
+          <div class="panel-header">
+            <h2>產品名單</h2>
+            <span id="resultCount">0 筆</span>
+          </div>
+          <div class="product-list" id="productList"></div>
+        </aside>
+
+        <section class="detail-panel" aria-live="polite">
+          <div class="empty-state" id="emptyState">
+            <h2>選擇產品查看價格</h2>
+            <p>可用指令快速定位產品、客戶或某個時間點的價格紀錄。</p>
+          </div>
+
+          <div class="detail-content hidden" id="detailContent">
+            <div class="detail-header">
+              <div>
+                <span class="sku" id="detailSku"></span>
+                <h2 id="detailName"></h2>
+                <p id="detailMeta"></p>
+              </div>
+              <div class="detail-actions">
+                <button class="secondary-button" id="editProductBtn">編輯產品</button>
+                <button class="secondary-button" id="updateBaseBtn">更新定價</button>
+                <button class="danger-button" id="deleteProductBtn">刪除產品</button>
+              </div>
+            </div>
+
+            <div class="price-strip">
+              <div>
+                <span>目前產品定價</span>
+                <strong id="detailBasePrice"></strong>
+              </div>
+              <div>
+                <span>定價生效日</span>
+                <strong id="detailBaseDate"></strong>
+              </div>
+              <div>
+                <span>客戶售價範圍</span>
+                <strong id="detailRange"></strong>
+              </div>
+            </div>
+
+            <div class="section-heading">
+              <h3>客戶售價</h3>
+              <button class="primary-button compact" id="addSaleBtn">新增售價</button>
+            </div>
+            <div class="customer-controls">
+              <div class="customer-search">
+                <input id="customerSearch" type="search" autocomplete="off" placeholder="搜尋客戶名稱" />
+              </div>
+              <div class="customer-filter-row">
+                <div class="segmented customer-filter" id="customerInitialFilter"></div>
+                <span id="customerFilterCount">0 筆</span>
+              </div>
+              <div class="customer-pagination">
+                <label>
+                  每頁
+                  <select id="customerPageSize">
+                    <option value="10">10 筆</option>
+                    <option value="25">25 筆</option>
+                    <option value="50">50 筆</option>
+                    <option value="all">全部</option>
+                  </select>
+                </label>
+                <div class="pagination-actions">
+                  <button class="secondary-button compact" id="customerPrevPage" type="button">上一頁</button>
+                  <span id="customerPageInfo">第 1 / 1 頁</span>
+                  <button class="secondary-button compact" id="customerNextPage" type="button">下一頁</button>
+                </div>
+              </div>
+            </div>
+            <div class="customer-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>客戶</th>
+                    <th>目前售價</th>
+                    <th>生效日</th>
+                    <th>毛利差</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="salesTable"></tbody>
+              </table>
+            </div>
+
+            <div class="section-heading timeline-heading">
+              <h3>時間軸</h3>
+              <div class="segmented" id="timelineMode">
+                <button class="active" data-mode="all">全部</button>
+                <button data-mode="base">定價</button>
+                <button data-mode="sale">客戶</button>
+              </div>
+            </div>
+            <div class="timeline-controls">
+              <div class="segmented" id="timelineSort">
+                <button class="active" data-sort="desc">新到舊</button>
+                <button data-sort="asc">舊到新</button>
+              </div>
+              <label class="timeline-customer-search">
+                客戶
+                <input id="timelineCustomerSearch" type="search" autocomplete="off" placeholder="搜尋客戶" />
+              </label>
+              <label>
+                起始
+                <input id="timelineStart" type="date" />
+              </label>
+              <label>
+                結束
+                <input id="timelineEnd" type="date" />
+              </label>
+              <button class="secondary-button compact" id="clearTimelineRange" type="button">清除日期</button>
+            </div>
+            <div class="timeline" id="timeline"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="productDialog">
+      <form method="dialog" id="productForm">
+        <h2>新增產品</h2>
+        <label>
+          SKU
+          <input name="sku" required placeholder="P-1001" />
+        </label>
+        <label>
+          產品名稱
+          <input name="name" required placeholder="高效能濾芯" />
+        </label>
+        <label>
+          分類
+          <input name="category" required placeholder="耗材" />
+        </label>
+        <label>
+          產品定價
+          <input name="price" type="number" min="0" step="1" required />
+        </label>
+        <label>
+          生效日期
+          <input name="date" type="date" required />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">建立</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="basePriceDialog">
+      <form method="dialog" id="basePriceForm">
+        <h2>更新產品定價</h2>
+        <label>
+          新定價
+          <input name="price" type="number" min="0" step="1" required />
+        </label>
+        <label>
+          生效日期
+          <input name="date" type="date" required />
+        </label>
+        <label>
+          備註
+          <input name="note" placeholder="例：原料成本調整" />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">更新</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="editProductDialog">
+      <form method="dialog" id="editProductForm">
+        <h2>編輯產品</h2>
+        <label>
+          SKU
+          <input name="sku" required />
+        </label>
+        <label>
+          產品名稱
+          <input name="name" required />
+        </label>
+        <label>
+          分類
+          <input name="category" required />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="deleteProductDialog">
+      <form method="dialog" id="deleteProductForm">
+        <h2>刪除產品</h2>
+        <p class="dialog-note" id="deleteProductMessage"></p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="danger-button">刪除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="deleteTimelineDialog">
+      <form method="dialog" id="deleteTimelineForm">
+        <h2>刪除時間紀錄</h2>
+        <p class="dialog-note" id="deleteTimelineMessage"></p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="danger-button">刪除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="saleDialog">
+      <form method="dialog" id="saleForm">
+        <h2>新增或更新客戶售價</h2>
+        <label>
+          客戶
+          <input name="customer" list="customerOptions" required placeholder="長青商行" />
+          <datalist id="customerOptions"></datalist>
+        </label>
+        <label>
+          售價
+          <input name="price" type="number" min="0" step="1" required />
+        </label>
+        <label>
+          生效日期
+          <input name="date" type="date" required />
+        </label>
+        <label>
+          備註
+          <input name="note" placeholder="例：年度合約價" />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="resetPasswordDialog">
+      <form method="dialog" id="resetPasswordForm">
+        <h2>設定新密碼</h2>
+        <p class="dialog-note">請輸入新密碼完成重設。</p>
+        <p class="login-error hidden" id="resetPasswordError"></p>
+        <label>
+          新密碼
+          <input name="password" type="password" autocomplete="new-password" minlength="6" required />
+        </label>
+        <label>
+          確認新密碼
+          <input name="confirmPassword" type="password" autocomplete="new-password" minlength="6" required />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">更新密碼</button>
+        </div>
+      </form>
+    </dialog>
+
+    <template id="productItemTemplate">
+      <button class="product-item">
+        <span class="item-main">
+          <strong></strong>
+          <small></small>
+        </span>
+        <span class="item-price"></span>
+      </button>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./vendor/xlsx.full.min.js?v=0.18.5"></script>
+    <script src="./supabase-config.js?v=20260625-1"></script>
+    <script src="./app.js?v=20260626-1"></script>
+  </body>
+</html>
