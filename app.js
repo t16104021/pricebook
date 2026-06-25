@@ -1,5 +1,4 @@
-const STORAGE_KEY = "pricing-manager-data-v1";
-const DATA_ROW_ID = "main";
+const STORAGE_KEY_PREFIX = "pricing-manager-data-v1";
 
 const seedData = {
   products: [
@@ -75,6 +74,7 @@ let customerInitial = "all";
 let customerPage = 1;
 let customerPageSize = 10;
 let dbClient = null;
+let currentUserId = null;
 let isCloudReady = false;
 let saveTimer = null;
 
@@ -154,7 +154,7 @@ function hasSupabaseConfig() {
 }
 
 function loadLocalData() {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = localStorage.getItem(localStorageKey());
   if (!stored) return structuredClone(seedData);
 
   try {
@@ -163,6 +163,10 @@ function loadLocalData() {
   } catch {
     return structuredClone(seedData);
   }
+}
+
+function localStorageKey() {
+  return currentUserId ? `${STORAGE_KEY_PREFIX}-${currentUserId}` : STORAGE_KEY_PREFIX;
 }
 
 function showAuth(message = "") {
@@ -225,18 +229,20 @@ async function initDataSource() {
     return;
   }
 
-  const loaded = await loadCloudData();
+  const loaded = await loadCloudData(sessionData.session.user.id);
   if (loaded) {
     showApp();
     render();
   }
 }
 
-async function loadCloudData() {
+async function loadCloudData(userId) {
+  currentUserId = userId;
+
   const { data: row, error } = await dbClient
     .from("pricebook_data")
     .select("payload")
-    .eq("id", DATA_ROW_ID)
+    .eq("id", currentUserId)
     .maybeSingle();
 
   if (error) {
@@ -245,21 +251,24 @@ async function loadCloudData() {
   }
 
   if (!row?.payload) {
+    data = structuredClone(seedData);
+    selectedProductId = data.products[0]?.id ?? null;
     const saved = await saveCloudData(true);
     if (!saved) return false;
     isCloudReady = true;
+    localStorage.setItem(localStorageKey(), JSON.stringify(data, null, 2));
     return true;
   }
 
   data = row.payload;
   selectedProductId = data.products[0]?.id ?? null;
   isCloudReady = true;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
+  localStorage.setItem(localStorageKey(), JSON.stringify(data, null, 2));
   return true;
 }
 
 function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data, null, 2));
+  localStorage.setItem(localStorageKey(), JSON.stringify(data, null, 2));
   if (!isCloudReady) return;
 
   clearTimeout(saveTimer);
@@ -267,10 +276,10 @@ function saveData() {
 }
 
 async function saveCloudData(force = false) {
-  if (!dbClient || (!isCloudReady && !force)) return false;
+  if (!dbClient || !currentUserId || (!isCloudReady && !force)) return false;
 
   const { error } = await dbClient.from("pricebook_data").upsert({
-    id: DATA_ROW_ID,
+    id: currentUserId,
     payload: data,
     updated_at: new Date().toISOString(),
   });
@@ -291,13 +300,13 @@ async function signIn(email, password) {
   els.authSubmit.textContent = "登入中";
 
   try {
-    const { error } = await dbClient.auth.signInWithPassword({ email, password });
+    const { data: authData, error } = await dbClient.auth.signInWithPassword({ email, password });
     if (error) {
       showAuth(authMessage(error));
       return;
     }
 
-    const loaded = await loadCloudData();
+    const loaded = await loadCloudData(authData.user.id);
     if (loaded) {
       showApp();
       render();
@@ -312,6 +321,10 @@ async function signIn(email, password) {
 
 async function signOut() {
   if (dbClient) await dbClient.auth.signOut();
+  currentUserId = null;
+  isCloudReady = false;
+  data = loadLocalData();
+  selectedProductId = data.products[0]?.id ?? null;
   showAuth();
 }
 
@@ -1268,7 +1281,13 @@ els.resetPasswordDialog.addEventListener("close", async () => {
     return;
   }
 
-  const loaded = await loadCloudData();
+  const { data: sessionData, error } = await dbClient.auth.getSession();
+  if (error || !sessionData.session) {
+    showAuth(error ? `讀取登入狀態失敗：${error.message}` : "");
+    return;
+  }
+
+  const loaded = await loadCloudData(sessionData.session.user.id);
   if (loaded) {
     showApp();
     render();

@@ -5,6 +5,7 @@
 - GitHub Pages：免費放靜態網站。
 - Supabase：免費方案內提供 Auth 與 Postgres 資料庫。
 - `supabase-config.js`：前端連 Supabase 的設定。anon key 可以公開，實際權限由 Supabase RLS 控制。
+- 每個登入帳號會有各自獨立的一份產品資料；不同帳號不會看到彼此資料。
 
 ## 1. 建立 Supabase 專案
 
@@ -32,6 +33,29 @@
 3. Add user。
 4. 輸入你要登入網站的 email 與 password。
 5. 建議勾選 Auto Confirm User。
+
+每新增一個使用者，該帳號第一次登入時會自動建立自己的產品資料列。不同帳號的資料彼此隔離。
+
+## 舊共用資料改成單一帳號資料
+
+如果你之前已經有舊資料存在 `id = main`，改成帳號隔離後，舊資料不會自動出現在任何帳號下。可以到 Supabase SQL Editor 先查出使用者 ID：
+
+```sql
+select id, email
+from auth.users;
+```
+
+再把舊共用資料複製給指定帳號，將 `使用者ID` 換成要保留舊資料的帳號 ID：
+
+```sql
+insert into public.pricebook_data (id, payload, updated_at)
+select '使用者ID', payload, now()
+from public.pricebook_data
+where id = 'main'
+on conflict (id) do update
+set payload = excluded.payload,
+    updated_at = excluded.updated_at;
+```
 
 ## 4. 填入前端設定
 
