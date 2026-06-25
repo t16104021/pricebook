@@ -91,6 +91,7 @@ h1 {
 .icon-button,
 .primary-button,
 .secondary-button,
+.danger-button,
 .quick-filters button,
 .segmented button {
   border: 1px solid var(--line);
@@ -119,6 +120,13 @@ h1 {
 .secondary-button {
   background: var(--surface-soft);
   font-weight: 700;
+}
+
+.danger-button {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: white;
+  font-weight: 800;
 }
 
 .compact {
@@ -231,6 +239,14 @@ h1 {
 .panel-header {
   padding: 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .panel-header span {
@@ -645,6 +661,7 @@ label input {
 
   .top-actions,
   .section-heading,
+  .detail-actions,
   .customer-filter-row {
     flex-wrap: wrap;
   }

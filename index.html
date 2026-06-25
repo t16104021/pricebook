@@ -9,7 +9,7 @@
         window.location.href = "https://t16104021.github.io/pricebook/";
       }
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260625-5" />
+    <link rel="stylesheet" href="./styles.css?v=20260625-6" />
   </head>
   <body>
     <main class="login-page" id="authShell">
@@ -113,7 +113,11 @@
                 <h2 id="detailName"></h2>
                 <p id="detailMeta"></p>
               </div>
-              <button class="secondary-button" id="updateBaseBtn">更新定價</button>
+              <div class="detail-actions">
+                <button class="secondary-button" id="editProductBtn">編輯產品</button>
+                <button class="secondary-button" id="updateBaseBtn">更新定價</button>
+                <button class="danger-button" id="deleteProductBtn">刪除產品</button>
+              </div>
             </div>
 
             <div class="price-strip">
@@ -260,6 +264,39 @@
       </form>
     </dialog>
 
+    <dialog id="editProductDialog">
+      <form method="dialog" id="editProductForm">
+        <h2>編輯產品</h2>
+        <label>
+          SKU
+          <input name="sku" required />
+        </label>
+        <label>
+          產品名稱
+          <input name="name" required />
+        </label>
+        <label>
+          分類
+          <input name="category" required />
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">儲存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="deleteProductDialog">
+      <form method="dialog" id="deleteProductForm">
+        <h2>刪除產品</h2>
+        <p class="dialog-note" id="deleteProductMessage"></p>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="confirm" class="danger-button">刪除</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="saleDialog">
       <form method="dialog" id="saleForm">
         <h2>新增或更新客戶售價</h2>
@@ -319,6 +356,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./supabase-config.js?v=20260625-1"></script>
-    <script src="./app.js?v=20260625-8"></script>
+    <script src="./app.js?v=20260625-9"></script>
   </body>
 </html>

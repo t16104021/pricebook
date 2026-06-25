@@ -118,12 +118,19 @@ const els = {
   clearTimelineRange: document.querySelector("#clearTimelineRange"),
   customerOptions: document.querySelector("#customerOptions"),
   addProductBtn: document.querySelector("#addProductBtn"),
+  editProductBtn: document.querySelector("#editProductBtn"),
+  deleteProductBtn: document.querySelector("#deleteProductBtn"),
   updateBaseBtn: document.querySelector("#updateBaseBtn"),
   addSaleBtn: document.querySelector("#addSaleBtn"),
   exportBtn: document.querySelector("#exportBtn"),
   importFile: document.querySelector("#importFile"),
   productDialog: document.querySelector("#productDialog"),
   productForm: document.querySelector("#productForm"),
+  editProductDialog: document.querySelector("#editProductDialog"),
+  editProductForm: document.querySelector("#editProductForm"),
+  deleteProductDialog: document.querySelector("#deleteProductDialog"),
+  deleteProductForm: document.querySelector("#deleteProductForm"),
+  deleteProductMessage: document.querySelector("#deleteProductMessage"),
   basePriceDialog: document.querySelector("#basePriceDialog"),
   basePriceForm: document.querySelector("#basePriceForm"),
   saleDialog: document.querySelector("#saleDialog"),
@@ -654,6 +661,25 @@ function openProductDialog() {
   els.productDialog.showModal();
 }
 
+function openEditProductDialog() {
+  const product = getSelectedProduct();
+  if (!product) return;
+
+  els.editProductForm.reset();
+  els.editProductForm.elements.sku.value = product.sku;
+  els.editProductForm.elements.name.value = product.name;
+  els.editProductForm.elements.category.value = product.category;
+  els.editProductDialog.showModal();
+}
+
+function openDeleteProductDialog() {
+  const product = getSelectedProduct();
+  if (!product) return;
+
+  els.deleteProductMessage.textContent = `確定要刪除「${product.name}」嗎？此操作會一併移除產品定價、客戶售價和時間軸紀錄。`;
+  els.deleteProductDialog.showModal();
+}
+
 function openBaseDialog() {
   const product = getSelectedProduct();
   if (!product) return;
@@ -685,6 +711,29 @@ function addProductFromForm() {
 
   data.products.unshift(product);
   selectedProductId = product.id;
+  saveData();
+  render();
+}
+
+function updateProductFromForm() {
+  const product = getSelectedProduct();
+  if (!product) return;
+
+  const form = els.editProductForm.elements;
+  product.sku = form.sku.value.trim();
+  product.name = form.name.value.trim();
+  product.category = form.category.value.trim();
+  saveData();
+  render();
+}
+
+function deleteSelectedProduct() {
+  const product = getSelectedProduct();
+  if (!product) return;
+
+  const productIndex = data.products.findIndex((item) => item.id === product.id);
+  data.products = data.products.filter((item) => item.id !== product.id);
+  selectedProductId = data.products[Math.min(productIndex, data.products.length - 1)]?.id ?? null;
   saveData();
   render();
 }
@@ -855,6 +904,8 @@ els.clearTimelineRange.addEventListener("click", () => {
 });
 
 els.addProductBtn.addEventListener("click", openProductDialog);
+els.editProductBtn.addEventListener("click", openEditProductDialog);
+els.deleteProductBtn.addEventListener("click", openDeleteProductDialog);
 els.updateBaseBtn.addEventListener("click", openBaseDialog);
 els.addSaleBtn.addEventListener("click", () => openSaleDialog());
 els.exportBtn.addEventListener("click", exportData);
@@ -866,6 +917,14 @@ els.importFile.addEventListener("change", (event) => {
 
 els.productDialog.addEventListener("close", () => {
   if (els.productDialog.returnValue === "confirm") addProductFromForm();
+});
+
+els.editProductDialog.addEventListener("close", () => {
+  if (els.editProductDialog.returnValue === "confirm") updateProductFromForm();
+});
+
+els.deleteProductDialog.addEventListener("close", () => {
+  if (els.deleteProductDialog.returnValue === "confirm") deleteSelectedProduct();
 });
 
 els.basePriceDialog.addEventListener("close", () => {
