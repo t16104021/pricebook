@@ -65,6 +65,9 @@ let data = loadLocalData();
 let selectedProductId = data.products[0]?.id ?? null;
 let query = "";
 let timelineMode = "all";
+let timelineSort = "desc";
+let timelineStart = "";
+let timelineEnd = "";
 let dbClient = null;
 let isCloudReady = false;
 let saveTimer = null;
@@ -96,6 +99,10 @@ const els = {
   salesTable: document.querySelector("#salesTable"),
   timeline: document.querySelector("#timeline"),
   timelineMode: document.querySelector("#timelineMode"),
+  timelineSort: document.querySelector("#timelineSort"),
+  timelineStart: document.querySelector("#timelineStart"),
+  timelineEnd: document.querySelector("#timelineEnd"),
+  clearTimelineRange: document.querySelector("#clearTimelineRange"),
   customerOptions: document.querySelector("#customerOptions"),
   addProductBtn: document.querySelector("#addProductBtn"),
   updateBaseBtn: document.querySelector("#updateBaseBtn"),
@@ -524,7 +531,11 @@ function renderSales(product, basePrice) {
 }
 
 function renderTimeline(product) {
-  const items = buildTimeline(product).filter((item) => timelineMode === "all" || item.type === timelineMode);
+  const items = buildTimeline(product)
+    .filter((item) => timelineMode === "all" || item.type === timelineMode)
+    .filter((item) => !timelineStart || item.date >= timelineStart)
+    .filter((item) => !timelineEnd || item.date <= timelineEnd)
+    .sort((a, b) => (timelineSort === "asc" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)));
   els.timeline.innerHTML = "";
 
   if (!items.length) {
@@ -713,6 +724,32 @@ els.timelineMode.addEventListener("click", (event) => {
   if (!button) return;
   timelineMode = button.dataset.mode;
   els.timelineMode.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+  renderDetail();
+});
+
+els.timelineSort.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  timelineSort = button.dataset.sort;
+  els.timelineSort.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+  renderDetail();
+});
+
+els.timelineStart.addEventListener("change", (event) => {
+  timelineStart = event.target.value;
+  renderDetail();
+});
+
+els.timelineEnd.addEventListener("change", (event) => {
+  timelineEnd = event.target.value;
+  renderDetail();
+});
+
+els.clearTimelineRange.addEventListener("click", () => {
+  timelineStart = "";
+  timelineEnd = "";
+  els.timelineStart.value = "";
+  els.timelineEnd.value = "";
   renderDetail();
 });
 
