@@ -9,7 +9,7 @@ Deno.test("parses an exact three-token price query", () => {
   assertEquals(parseCommand("查價 長青商行 ABC-100"), {
     ok: true,
     customer: "長青商行",
-    sku: "ABC-100",
+    productQuery: "ABC-100",
   });
 });
 
@@ -17,7 +17,7 @@ Deno.test("collapses extra whitespace between tokens", () => {
   assertEquals(parseCommand("  查價   長青商行   ABC-100  "), {
     ok: true,
     customer: "長青商行",
-    sku: "ABC-100",
+    productQuery: "ABC-100",
   });
 });
 
@@ -25,7 +25,7 @@ Deno.test("supports quoted customer and product tokens", () => {
   assertEquals(parseCommand('查價 "Great North Co" "ABC 100"'), {
     ok: true,
     customer: "Great North Co",
-    sku: "ABC 100",
+    productQuery: "ABC 100",
   });
 });
 

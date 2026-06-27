@@ -58,6 +58,6 @@ export function parseCommand(input: string): ParsedCommand {
   return {
     ok: true,
     customer: tokens[1],
-    sku: tokens[2],
+    productQuery: tokens[2],
   };
 }

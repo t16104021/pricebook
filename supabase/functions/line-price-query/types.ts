@@ -26,7 +26,7 @@ export type ParsedCommand =
   | {
     ok: true;
     customer: string;
-    sku: string;
+    productQuery: string;
   }
   | {
     ok: false;
