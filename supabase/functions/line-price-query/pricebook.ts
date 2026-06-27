@@ -3,7 +3,7 @@ import type { PricebookPayload, PriceEntry, Product } from "./types.ts";
 function latest(entries: PriceEntry[]): PriceEntry | null {
   return entries.reduce<PriceEntry | null>(
     (current, entry) =>
-      current === null || entry.date.localeCompare(current.date) > 0
+      current === null || entry.date.localeCompare(current.date) >= 0
         ? entry
         : current,
     null,
@@ -35,11 +35,11 @@ export function queryPricebook(
   if (!customerExists) return `查無客戶：${customer}`;
 
   const normalizedQuery = productQuery.toLocaleLowerCase();
-  const exactMatch = payload.products.find(
+  const exactMatches = payload.products.filter(
     (product) => product.sku.toLocaleLowerCase() === normalizedQuery,
   );
-  const matches = exactMatch
-    ? [exactMatch]
+  const matches = exactMatches.length > 0
+    ? exactMatches
     : payload.products.filter((product) =>
       product.sku.toLocaleLowerCase().includes(normalizedQuery) ||
       product.name.toLocaleLowerCase().includes(normalizedQuery)

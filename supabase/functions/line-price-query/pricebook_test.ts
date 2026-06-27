@@ -53,6 +53,79 @@ Deno.test("prefers an exact case-insensitive SKU and returns latest prices", () 
   );
 });
 
+Deno.test("uses the last appended price when dates are equal", () => {
+  const sameDatePayload: PricebookPayload = {
+    products: [{
+      id: "same-date",
+      sku: "SAME-1",
+      name: "同日更新品",
+      basePrices: [
+        { price: 1000, date: "2026-06-27" },
+        { price: 1250, date: "2026-06-27" },
+      ],
+      sales: [{
+        customer: "長青商行",
+        prices: [
+          { price: 800, date: "2026-06-27", note: "上午" },
+          { price: 950, date: "2026-06-27", note: "下午追加" },
+        ],
+      }],
+    }],
+  };
+
+  assertEquals(
+    queryPricebook(sameDatePayload, "長青商行", "SAME-1"),
+    [
+      "客戶：長青商行",
+      "產品：SAME-1 同日更新品",
+      "產品定價：NT$1,250",
+      "定價日期：2026/06/27",
+      "客戶售價：NT$950",
+      "售價日期：2026/06/27",
+      "備註：下午追加",
+    ].join("\n"),
+  );
+});
+
+Deno.test("lists duplicate exact SKUs instead of selecting the first", () => {
+  const duplicateSkuPayload: PricebookPayload = {
+    products: [
+      {
+        id: "upper",
+        sku: "DUP-1",
+        name: "大寫版本",
+        basePrices: [],
+        sales: [{ customer: "長青商行", prices: [] }],
+      },
+      {
+        id: "lower",
+        sku: "dup-1",
+        name: "小寫版本",
+        basePrices: [],
+        sales: [],
+      },
+      {
+        id: "partial",
+        sku: "DUP-10",
+        name: "部分符合",
+        basePrices: [],
+        sales: [],
+      },
+    ],
+  };
+
+  assertEquals(
+    queryPricebook(duplicateSkuPayload, "長青商行", "DuP-1"),
+    [
+      "找到 2 個產品：",
+      "1. DUP-1 大寫版本",
+      "2. dup-1 小寫版本",
+      "",
+      "請輸入完整產品編號。",
+    ].join("\n"),
+  );
+});
+
 Deno.test("lists all candidates for a case-insensitive partial match", () => {
   assertEquals(
     queryPricebook(payload, "長青商行", "abc"),
