@@ -17,9 +17,9 @@ export interface WebhookDependencies {
   channelAccessToken: string;
   allowedUserId: string;
   verifySignature: typeof verifyLineSignature;
-  claimEvent(eventId: string): Promise<boolean>;
-  completeEvent(eventId: string): Promise<void>;
-  releaseEvent(eventId: string): Promise<void>;
+  claimEvent(eventId: string): Promise<string | null>;
+  completeEvent(eventId: string, claimToken: string): Promise<void>;
+  releaseEvent(eventId: string, claimToken: string): Promise<void>;
   loadPayload(): Promise<PricebookPayload>;
   reply(
     replyToken: string,
@@ -37,7 +37,7 @@ interface DatabaseError {
 interface DatabaseClient {
   rpc(
     name: string,
-    args: { p_event_id: string },
+    args: { p_event_id: string; p_claim_token?: string },
   ): PromiseLike<{
     data: unknown;
     error: DatabaseError | null;
@@ -64,27 +64,35 @@ export function createDatabaseAdapter(
   client: DatabaseClient,
   pricebookOwnerId: string,
 ) {
-  const claimEvent = async (eventId: string): Promise<boolean> => {
+  const claimEvent = async (eventId: string): Promise<string | null> => {
     const { data, error } = await client.rpc(
       "claim_line_webhook_event",
       { p_event_id: eventId },
     );
     if (error) throw error;
-    return data === true;
+    if (data === null) return null;
+    if (typeof data !== "string") throw new Error("Invalid claim response");
+    return data;
   };
 
-  const completeEvent = async (eventId: string): Promise<void> => {
+  const completeEvent = async (
+    eventId: string,
+    claimToken: string,
+  ): Promise<void> => {
     const { error } = await client.rpc(
       "complete_line_webhook_event",
-      { p_event_id: eventId },
+      { p_event_id: eventId, p_claim_token: claimToken },
     );
     if (error) throw error;
   };
 
-  const releaseEvent = async (eventId: string): Promise<void> => {
+  const releaseEvent = async (
+    eventId: string,
+    claimToken: string,
+  ): Promise<void> => {
     const { error } = await client.rpc(
       "release_line_webhook_event",
-      { p_event_id: eventId },
+      { p_event_id: eventId, p_claim_token: claimToken },
     );
     if (error) throw error;
   };
@@ -104,11 +112,12 @@ export function createDatabaseAdapter(
 
 export async function releaseFailedClaim(
   eventId: string,
+  claimToken: string,
   originalError: unknown,
-  releaseEvent: (eventId: string) => Promise<void>,
+  releaseEvent: (eventId: string, claimToken: string) => Promise<void>,
 ): Promise<never> {
   try {
-    await releaseEvent(eventId);
+    await releaseEvent(eventId, claimToken);
   } catch {
     // Preserve the event failure without logging release details.
   }
@@ -131,7 +140,8 @@ export function createWebhookHandler(
       return;
     }
 
-    if (!(await dependencies.claimEvent(event.webhookEventId))) return;
+    const claimToken = await dependencies.claimEvent(event.webhookEventId);
+    if (claimToken === null) return;
 
     let replyText: string;
     try {
@@ -170,13 +180,14 @@ export function createWebhookHandler(
       } catch {
         await releaseFailedClaim(
           event.webhookEventId,
+          claimToken,
           error,
           dependencies.releaseEvent,
         );
       }
     }
 
-    await dependencies.completeEvent(event.webhookEventId);
+    await dependencies.completeEvent(event.webhookEventId, claimToken);
   };
 
   return async (request: Request): Promise<Response> => {

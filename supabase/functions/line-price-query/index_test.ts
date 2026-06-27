@@ -36,8 +36,8 @@ function event(overrides: Record<string, unknown> = {}) {
 function setup(overrides: Partial<WebhookDependencies> = {}) {
   const replies: string[] = [];
   const claimed: string[] = [];
-  const completed: string[] = [];
-  const released: string[] = [];
+  const completed: Array<[string, string]> = [];
+  const released: Array<[string, string]> = [];
   const dependencies: WebhookDependencies = {
     channelSecret: "secret",
     channelAccessToken: "access-token",
@@ -46,13 +46,13 @@ function setup(overrides: Partial<WebhookDependencies> = {}) {
       signature === "valid" && secret === "secret",
     claimEvent: async (eventId) => {
       claimed.push(eventId);
-      return true;
+      return `claim-token-${eventId}`;
     },
-    completeEvent: async (eventId) => {
-      completed.push(eventId);
+    completeEvent: async (eventId, claimToken) => {
+      completed.push([eventId, claimToken]);
     },
-    releaseEvent: async (eventId) => {
-      released.push(eventId);
+    releaseEvent: async (eventId, claimToken) => {
+      released.push([eventId, claimToken]);
     },
     loadPayload: async () => payload,
     reply: async (_replyToken, text) => {
@@ -118,7 +118,7 @@ Deno.test("ignores unsupported and duplicate events", async () => {
   const { handler, replies, released } = setup({
     claimEvent: async (eventId) => {
       claimCalls.push(eventId);
-      return false;
+      return null;
     },
     loadPayload: async () => {
       loadCalls++;
@@ -177,7 +177,7 @@ Deno.test("claims before rejecting an unauthorized user", async () => {
 
   assertEquals(claimed, ["evt-1"]);
   assertEquals(replies, ["此帳號沒有查價權限"]);
-  assertEquals(completed, ["evt-1"]);
+  assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
 });
 
 Deno.test("replies with usage for a malformed command", async () => {
@@ -189,7 +189,7 @@ Deno.test("replies with usage for a malformed command", async () => {
   assertEquals(replies, [
     "格式：查價 客戶名稱 產品編號\n範例：查價 長青商行 ABC-100",
   ]);
-  assertEquals(completed, ["evt-1"]);
+  assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
 });
 
 Deno.test("loads the configured payload and replies with a price", async () => {
@@ -199,7 +199,7 @@ Deno.test("loads the configured payload and replies with a price", async () => {
   assertEquals(response.status, 200);
   assertEquals(replies[0].includes("產品定價：NT$1,200"), true);
   assertEquals(replies[0].includes("客戶售價：NT$980"), true);
-  assertEquals(completed, ["evt-1"]);
+  assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
   assertEquals(released, []);
 });
 
@@ -213,7 +213,7 @@ Deno.test("completes after a safe reply when payload loading fails", async () =>
 
   assertEquals(response.status, 200);
   assertEquals(replies, ["查價服務暫時無法使用，請稍後再試"]);
-  assertEquals(completed, ["evt-1"]);
+  assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
   assertEquals(released, []);
 });
 
@@ -233,7 +233,7 @@ Deno.test("completes when the safe fallback reply succeeds", async () => {
 
   assertEquals(response.status, 200);
   assertEquals(sentTexts[1], "查價服務暫時無法使用，請稍後再試");
-  assertEquals(completed, ["evt-1"]);
+  assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
   assertEquals(released, []);
 });
 
@@ -250,7 +250,7 @@ Deno.test("releases and returns 503 when both reply attempts fail", async () => 
   assertEquals(response.status, 503);
   assertEquals(replyCalls, 2);
   assertEquals(completed, []);
-  assertEquals(released, ["evt-1"]);
+  assertEquals(released, [["evt-1", "claim-token-evt-1"]]);
 });
 
 Deno.test("a release failure does not replace the original error", async () => {
@@ -258,7 +258,7 @@ Deno.test("a release failure does not replace the original error", async () => {
   let thrown: unknown;
 
   try {
-    await releaseFailedClaim("evt-1", original, async () => {
+    await releaseFailedClaim("evt-1", "claim-token", original, async () => {
       throw new Error("release failure");
     });
   } catch (error) {
@@ -300,7 +300,7 @@ Deno.test("database adapter uses claim, complete, and release RPCs", async () =>
     rpc(name: string, args: unknown) {
       calls.push(["rpc", name, args]);
       return Promise.resolve({
-        data: name === "claim_line_webhook_event",
+        data: name === "claim_line_webhook_event" ? "claim-token-1" : null,
         error: null,
       });
     },
@@ -329,19 +329,66 @@ Deno.test("database adapter uses claim, complete, and release RPCs", async () =>
     "owner-id",
   );
 
-  assertEquals(await adapter.claimEvent("evt-1"), true);
-  await adapter.completeEvent("evt-1");
-  await adapter.releaseEvent("evt-2");
+  assertEquals(await adapter.claimEvent("evt-1"), "claim-token-1");
+  await adapter.completeEvent("evt-1", "claim-token-1");
+  await adapter.releaseEvent("evt-2", "claim-token-2");
   assertEquals(await adapter.loadPayload(), payload);
   assertEquals(calls, [
     ["rpc", "claim_line_webhook_event", { p_event_id: "evt-1" }],
-    ["rpc", "complete_line_webhook_event", { p_event_id: "evt-1" }],
-    ["rpc", "release_line_webhook_event", { p_event_id: "evt-2" }],
+    [
+      "rpc",
+      "complete_line_webhook_event",
+      { p_event_id: "evt-1", p_claim_token: "claim-token-1" },
+    ],
+    [
+      "rpc",
+      "release_line_webhook_event",
+      { p_event_id: "evt-2", p_claim_token: "claim-token-2" },
+    ],
     ["from", "pricebook_data"],
     ["select", "payload"],
     ["load-eq", "id", "owner-id"],
     ["single"],
   ]);
+});
+
+Deno.test("an old claim token cannot complete or release a newer lease", async () => {
+  let currentToken: string | null = "new-token";
+  let status = "processing";
+  const client = {
+    rpc(name: string, args: {
+      p_event_id: string;
+      p_claim_token?: string;
+    }) {
+      if (name === "claim_line_webhook_event") {
+        return Promise.resolve({ data: currentToken, error: null });
+      }
+      if (
+        args.p_event_id === "evt-1" &&
+        args.p_claim_token === currentToken &&
+        status === "processing"
+      ) {
+        if (name === "complete_line_webhook_event") status = "completed";
+        if (name === "release_line_webhook_event") {
+          status = "released";
+          currentToken = null;
+        }
+      }
+      return Promise.resolve({ data: null, error: null });
+    },
+  };
+  const adapter = createDatabaseAdapter(
+    client as Parameters<typeof createDatabaseAdapter>[0],
+    "owner-id",
+  );
+
+  await adapter.completeEvent("evt-1", "old-token");
+  await adapter.releaseEvent("evt-1", "old-token");
+  assertEquals(status, "processing");
+  assertEquals(currentToken, "new-token");
+
+  await adapter.completeEvent("evt-1", "new-token");
+  assertEquals(status, "completed");
 });
 
 Deno.test("database adapter throws RPC errors", async () => {
@@ -414,7 +461,7 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
     rpc(name: string, args: unknown) {
       clientCalls.push(["rpc", name, args]);
       return Promise.resolve({
-        data: name === "claim_line_webhook_event",
+        data: name === "claim_line_webhook_event" ? "runtime-token" : null,
         error: null,
       });
     },
@@ -477,7 +524,11 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
     ["select", "payload"],
     ["load-eq", "id", "owner-id"],
     ["single"],
-    ["rpc", "complete_line_webhook_event", { p_event_id: "evt-1" }],
+    [
+      "rpc",
+      "complete_line_webhook_event",
+      { p_event_id: "evt-1", p_claim_token: "runtime-token" },
+    ],
   ]);
   const [headers, replyBody] = replyCalls[0] as [
     Record<string, string>,
@@ -487,23 +538,58 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
   assertEquals(replyBody.includes("產品定價：NT$1,200"), true);
 });
 
-Deno.test("migration defines recoverable and locked-down webhook RPCs", async () => {
+Deno.test("initial webhook migration remains unchanged", async () => {
   const sql = await Deno.readTextFile(new URL(
     "../../migrations/202606270001_create_line_webhook_events.sql",
     import.meta.url,
   ));
+  const expected = `create table if not exists public.line_webhook_events (
+  event_id text primary key,
+  processed_at timestamptz not null default now()
+);
+
+alter table public.line_webhook_events enable row level security;
+
+comment on table public.line_webhook_events is
+  'Processed LINE webhook event IDs. Only the service role may access this table.';
+
+create index if not exists line_webhook_events_processed_at_idx
+  on public.line_webhook_events (processed_at);
+`;
+
+  assertEquals(sql, expected);
+});
+
+Deno.test("upgrade migration defines fenced and locked-down webhook RPCs", async () => {
+  const sql = await Deno.readTextFile(new URL(
+    "../../migrations/202606270002_upgrade_line_webhook_events.sql",
+    import.meta.url,
+  ));
   const requiredPatterns = [
-    /status text not null[\s\S]*check \(status in \('processing', 'completed'\)\)/i,
-    /claimed_at timestamptz not null default now\(\)/i,
-    /processed_at timestamptz null/i,
-    /claim_line_webhook_event\(p_event_id text\)[\s\S]*returns boolean/i,
-    /status = 'processing'[\s\S]*claimed_at < now\(\) - interval '5 minutes'/i,
+    /add column if not exists status text/i,
+    /add column if not exists claimed_at timestamptz/i,
+    /add column if not exists claim_token text/i,
+    /set status = 'completed'[\s\S]*where status is null/i,
+    /alter column claimed_at set default now\(\)/i,
+    /alter column processed_at drop not null/i,
+    /check[\s\S]*status in \('processing', 'completed'\)/i,
+    /status = 'processing'[\s\S]*claim_token is not null/i,
+    /claim_line_webhook_event\(p_event_id text\)[\s\S]*returns text/i,
+    /gen_random_uuid\(\)::text/i,
+    /create unique index if not exists line_webhook_events_claim_token_idx[\s\S]*on public\.line_webhook_events \(claim_token\)[\s\S]*where claim_token is not null/i,
+    /status = 'processing'[\s\S]*claimed_at < now\(\) - interval '5 minutes'[\s\S]*claim_token/i,
     /processed_at < now\(\) - interval '30 days'/i,
-    /complete_line_webhook_event\(p_event_id text\)/i,
-    /release_line_webhook_event\(p_event_id text\)/i,
+    /complete_line_webhook_event\(\s*p_event_id text,\s*p_claim_token text\s*\)/i,
+    /complete_line_webhook_event[\s\S]*where event_id = p_event_id[\s\S]*claim_token = p_claim_token[\s\S]*status = 'processing'/i,
+    /release_line_webhook_event\(\s*p_event_id text,\s*p_claim_token text\s*\)/i,
+    /release_line_webhook_event[\s\S]*where event_id = p_event_id[\s\S]*claim_token = p_claim_token[\s\S]*status = 'processing'/i,
     /security definer[\s\S]*set search_path = pg_catalog\s*(?:\n|$)/i,
-    /revoke execute on function[\s\S]*from public, anon, authenticated/i,
-    /grant execute on function[\s\S]*to service_role/i,
+    /revoke execute on function public\.claim_line_webhook_event\(text\)[\s\S]*from public, anon, authenticated/i,
+    /revoke execute on function public\.complete_line_webhook_event\(text, text\)[\s\S]*from public, anon, authenticated/i,
+    /revoke execute on function public\.release_line_webhook_event\(text, text\)[\s\S]*from public, anon, authenticated/i,
+    /grant execute on function public\.claim_line_webhook_event\(text\)[\s\S]*to service_role/i,
+    /grant execute on function public\.complete_line_webhook_event\(text, text\)[\s\S]*to service_role/i,
+    /grant execute on function public\.release_line_webhook_event\(text, text\)[\s\S]*to service_role/i,
   ];
 
   for (const pattern of requiredPatterns) {
