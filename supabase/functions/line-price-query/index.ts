@@ -15,7 +15,7 @@ interface LineTextEvent {
 export interface WebhookDependencies {
   channelSecret: string;
   channelAccessToken: string;
-  allowedUserId: string;
+  allowedUserIds: string[];
   verifySignature: typeof verifyLineSignature;
   claimEvent(eventId: string): Promise<string | null>;
   completeEvent(eventId: string, claimToken: string): Promise<void>;
@@ -58,6 +58,17 @@ export function requiredEnv(name: string, readEnv: EnvReader): string {
   const value = readEnv(name);
   if (!value) throw new Error(`Missing environment variable: ${name}`);
   return value;
+}
+
+function parseAllowedUserIds(
+  primaryUserId: string,
+  extraUserIds: string | undefined,
+): string[] {
+  const userIds = [primaryUserId, ...(extraUserIds?.split(",") ?? [])]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  return [...new Set(userIds)];
 }
 
 export function createDatabaseAdapter(
@@ -145,7 +156,7 @@ export function createWebhookHandler(
 
     let replyText: string;
     try {
-      if (event.source?.userId !== dependencies.allowedUserId) {
+      if (!dependencies.allowedUserIds.includes(event.source?.userId ?? "")) {
         replyText = "此帳號沒有查價權限";
       } else {
         const command = parseCommand(event.message.text ?? "");
@@ -242,7 +253,10 @@ export function createRuntimeHandler(
     "LINE_CHANNEL_ACCESS_TOKEN",
     readEnv,
   );
-  const allowedUserId = requiredEnv("LINE_ALLOWED_USER_ID", readEnv);
+  const allowedUserIds = parseAllowedUserIds(
+    requiredEnv("LINE_ALLOWED_USER_ID", readEnv),
+    readEnv("LINE_ALLOWED_USER_IDS"),
+  );
   const pricebookOwnerId = requiredEnv("PRICEBOOK_OWNER_ID", readEnv);
   const supabaseUrl = requiredEnv("SUPABASE_URL", readEnv);
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY", readEnv);
@@ -255,7 +269,7 @@ export function createRuntimeHandler(
   return createWebhookHandler({
     channelSecret,
     channelAccessToken,
-    allowedUserId,
+    allowedUserIds,
     verifySignature: verifyLineSignature,
     ...database,
     reply: replyToLine,

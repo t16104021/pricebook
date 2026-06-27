@@ -41,7 +41,7 @@ function setup(overrides: Partial<WebhookDependencies> = {}) {
   const dependencies: WebhookDependencies = {
     channelSecret: "secret",
     channelAccessToken: "access-token",
-    allowedUserId: "allowed-user",
+    allowedUserIds: ["allowed-user"],
     verifySignature: (_body, signature, secret) =>
       Promise.resolve(signature === "valid" && secret === "secret"),
     claimEvent: (eventId) => {
@@ -180,6 +180,18 @@ Deno.test("claims before rejecting an unauthorized user", async () => {
 
   assertEquals(claimed, ["evt-1"]);
   assertEquals(replies, ["此帳號沒有查價權限"]);
+  assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
+});
+
+Deno.test("accepts any configured allowed user id", async () => {
+  const { handler, replies, completed } = setup({
+    allowedUserIds: ["allowed-user", "second-user"],
+  });
+  await handler(post(JSON.stringify({
+    events: [event({ source: { type: "user", userId: "second-user" } })],
+  })));
+
+  assertEquals(replies[0].includes("產品定價：NT$1,200"), true);
   assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
 });
 
@@ -458,6 +470,7 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
     LINE_CHANNEL_SECRET: "channel-secret",
     LINE_CHANNEL_ACCESS_TOKEN: "channel-token",
     LINE_ALLOWED_USER_ID: "allowed-user",
+    LINE_ALLOWED_USER_IDS: "allowed-user,second-user",
     PRICEBOOK_OWNER_ID: "owner-id",
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
@@ -543,6 +556,60 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
   ];
   assertEquals(headers.authorization, "Bearer channel-token");
   assertEquals(replyBody.includes("產品定價：NT$1,200"), true);
+});
+
+Deno.test("runtime configuration wires multiple allowed user ids", async () => {
+  const env: Record<string, string> = {
+    LINE_CHANNEL_SECRET: "channel-secret",
+    LINE_CHANNEL_ACCESS_TOKEN: "channel-token",
+    LINE_ALLOWED_USER_ID: "allowed-user",
+    LINE_ALLOWED_USER_IDS: "allowed-user, second-user , allowed-user",
+    PRICEBOOK_OWNER_ID: "owner-id",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+  };
+  const client = {
+    rpc() {
+      return Promise.resolve({ data: null, error: null });
+    },
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                single() {
+                  return Promise.resolve({ data: { payload }, error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const handler = createRuntimeHandler(
+    (name) => env[name],
+    () => client as Parameters<typeof createDatabaseAdapter>[0],
+  );
+  const rawBody = JSON.stringify({
+    events: [event({ source: { type: "user", userId: "second-user" } })],
+  });
+  const signature = await createLineSignature(
+    rawBody,
+    env.LINE_CHANNEL_SECRET,
+  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ((_input, _init) => {
+    return Promise.resolve(new Response("", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(post(rawBody, signature));
+    assertEquals(response.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 Deno.test("initial webhook migration remains unchanged", async () => {
