@@ -1,10 +1,12 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
   createDatabaseAdapter,
+  createRuntimeHandler,
   createWebhookHandler,
   releaseFailedClaim,
   type WebhookDependencies,
 } from "./index.ts";
+import { createLineSignature } from "./line.ts";
 import type { PricebookPayload } from "./types.ts";
 
 const payload: PricebookPayload = {
@@ -315,4 +317,159 @@ Deno.test("database adapter throws non-duplicate claim errors", async () => {
   }
 
   assertEquals(thrown === failure, true);
+});
+
+Deno.test("database adapter throws release errors", async () => {
+  const failure = { code: "XX001" };
+  const client = {
+    from() {
+      return {
+        delete() {
+          return {
+            eq() {
+              return Promise.resolve({ error: failure });
+            },
+          };
+        },
+      };
+    },
+  };
+  const adapter = createDatabaseAdapter(
+    client as unknown as Parameters<typeof createDatabaseAdapter>[0],
+    "owner-id",
+  );
+  let thrown: unknown;
+
+  try {
+    await adapter.releaseEvent("evt-1");
+  } catch (error) {
+    thrown = error;
+  }
+
+  assertEquals(thrown === failure, true);
+});
+
+Deno.test("runtime configuration reports each missing environment variable", () => {
+  const names = [
+    "LINE_CHANNEL_SECRET",
+    "LINE_CHANNEL_ACCESS_TOKEN",
+    "LINE_ALLOWED_USER_ID",
+    "PRICEBOOK_OWNER_ID",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+  ];
+  const complete = Object.fromEntries(names.map((name) => [name, "value"]));
+
+  for (const missing of names) {
+    const env = { ...complete };
+    delete env[missing];
+    let thrown: unknown;
+    try {
+      createRuntimeHandler(
+        (name) => env[name],
+        () => {
+          throw new Error("client factory should not run");
+        },
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    assertEquals(
+      thrown instanceof Error ? thrown.message : "",
+      `Missing environment variable: ${missing}`,
+    );
+  }
+});
+
+Deno.test("runtime configuration wires secrets, owner, and service client", async () => {
+  const env: Record<string, string> = {
+    LINE_CHANNEL_SECRET: "channel-secret",
+    LINE_CHANNEL_ACCESS_TOKEN: "channel-token",
+    LINE_ALLOWED_USER_ID: "allowed-user",
+    PRICEBOOK_OWNER_ID: "owner-id",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+  };
+  const clientCalls: unknown[] = [];
+  const replyCalls: unknown[] = [];
+  const client = {
+    from(table: string) {
+      clientCalls.push(["from", table]);
+      return {
+        insert(value: unknown) {
+          clientCalls.push(["insert", value]);
+          return Promise.resolve({ error: null });
+        },
+        delete() {
+          return {
+            eq() {
+              return Promise.resolve({ error: null });
+            },
+          };
+        },
+        select(column: string) {
+          clientCalls.push(["select", column]);
+          return {
+            eq(filterColumn: string, value: string) {
+              clientCalls.push(["load-eq", filterColumn, value]);
+              return {
+                single() {
+                  clientCalls.push(["single"]);
+                  return Promise.resolve({ data: { payload }, error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const handler = createRuntimeHandler(
+    (name) => env[name],
+    (url, key) => {
+      clientCalls.push(["createClient", url, key]);
+      return client as Parameters<typeof createDatabaseAdapter>[0];
+    },
+  );
+  const rawBody = JSON.stringify({ events: [event()] });
+  const signature = await createLineSignature(
+    rawBody,
+    env.LINE_CHANNEL_SECRET,
+  );
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input, init) => {
+    replyCalls.push([
+      init?.headers,
+      typeof init?.body === "string" ? init.body : "",
+    ]);
+    return new Response("", { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(post(rawBody, signature));
+    assertEquals(response.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assertEquals(clientCalls, [
+    [
+      "createClient",
+      "https://example.supabase.co",
+      "service-role-key",
+    ],
+    ["from", "line_webhook_events"],
+    ["insert", { event_id: "evt-1" }],
+    ["from", "pricebook_data"],
+    ["select", "payload"],
+    ["load-eq", "id", "owner-id"],
+    ["single"],
+  ]);
+  const [headers, replyBody] = replyCalls[0] as [
+    Record<string, string>,
+    string,
+  ];
+  assertEquals(headers.authorization, "Bearer channel-token");
+  assertEquals(replyBody.includes("產品定價：NT$1,200"), true);
 });

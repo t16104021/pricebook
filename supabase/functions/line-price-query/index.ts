@@ -206,6 +206,7 @@ export function createWebhookHandler(
 
 export function createRuntimeHandler(
   readEnv: EnvReader = (name) => Deno.env.get(name),
+  clientFactory: (url: string, key: string) => unknown = createClient,
 ): (request: Request) => Promise<Response> {
   const channelSecret = requiredEnv("LINE_CHANNEL_SECRET", readEnv);
   const channelAccessToken = requiredEnv(
@@ -216,7 +217,7 @@ export function createRuntimeHandler(
   const pricebookOwnerId = requiredEnv("PRICEBOOK_OWNER_ID", readEnv);
   const supabaseUrl = requiredEnv("SUPABASE_URL", readEnv);
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY", readEnv);
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = clientFactory(supabaseUrl, serviceRoleKey);
   const database = createDatabaseAdapter(
     supabase as unknown as DatabaseClient,
     pricebookOwnerId,
