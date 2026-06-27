@@ -9,19 +9,35 @@
 
 ## 取得管理者 LINE User ID
 
-部署 Function 並暫時查看 Edge Function logs。從本人傳送一則測試訊息後，
-讀取 webhook 的 `source.userId`，將它設定為 `LINE_ALLOWED_USER_ID`。
-正式完成後，log 不得輸出完整訊息內容、access token 或 customer price data。
+在 LINE Developers Console 開啟此 Messaging API channel，從 Basic settings
+找到 `Your user ID`，將它設定為 `LINE_ALLOWED_USER_ID`。同一個 provider 下，
+這個值與本人傳送訊息時 webhook 的 `source.userId` 相同。
 
 ## 設定 Secrets
 
-先登入 Supabase CLI，並將本功能需要的 migration 套用至指定專案：
+先登入 Supabase CLI，將本機專案連結至指定的 Supabase project：
 
 ```bash
-supabase db push --project-ref fuhzrbbyqoojjguiuijf
+supabase login
+supabase link --project-ref fuhzrbbyqoojjguiuijf
+```
+
+`supabase db push` 會套用至已 link 的 project。先用 dry run 檢視即將套用的
+migration，確認內容後再正式套用：
+
+```bash
+supabase db push --dry-run
+supabase db push
 ```
 
 migration 必須先成功套用，LINE 查價功能才可正常使用。接著設定 Edge Function secrets：
+
+建議到 Supabase Dashboard 的 Edge Function Secrets 管理頁，逐項輸入
+`LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_ALLOWED_USER_ID`
+與 `PRICEBOOK_OWNER_ID`，避免真值留在 shell history。
+
+以下 CLI 命令只以 placeholders 示意，不可將真值直接輸入共享終端或會保留
+history 的終端：
 
 ```bash
 supabase secrets set \
@@ -32,9 +48,19 @@ supabase secrets set \
   --project-ref fuhzrbbyqoojjguiuijf
 ```
 
+也可以使用本機 env file。執行前必須確認 `.env.line-bot` 已被 `.gitignore`
+忽略；檔案只存放於受信任的本機環境，使用完畢後必須安全刪除：
+
+```bash
+supabase secrets set \
+  --env-file .env.line-bot \
+  --project-ref fuhzrbbyqoojjguiuijf
+```
+
 `SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY` 由 Supabase Edge Functions 預設提供。
-這兩個值不得寫入 GitHub、前端 JavaScript 或本文件；尤其
-`SUPABASE_SERVICE_ROLE_KEY` 絕不可暴露在前端。
+所有 LINE secret、token、User ID、owner UUID 與 Supabase secret 都不得提交至
+GitHub、寫回本文件或放入前端 JavaScript；尤其 `SUPABASE_SERVICE_ROLE_KEY`
+絕不可暴露在前端。
 
 ## 部署
 
