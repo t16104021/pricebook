@@ -19,6 +19,9 @@ export interface Product {
 }
 
 export interface PricebookPayload {
+  settings?: {
+    aiReplyInstructions?: string;
+  };
   products: Product[];
 }
 
@@ -28,6 +31,7 @@ export interface PersonalReplyContext {
   productName: string;
   customerPrice: PriceEntry | null;
   note: string;
+  aiReplyInstructions?: string;
 }
 
 export type PricebookQueryResult =

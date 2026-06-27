@@ -108,6 +108,9 @@ export function queryPricebookResult(
       productName: product.name,
       customerPrice,
       note,
+      ...(payload.settings?.aiReplyInstructions
+        ? { aiReplyInstructions: payload.settings.aiReplyInstructions }
+        : {}),
     },
   };
 }

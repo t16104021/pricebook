@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>產品售價管理</title>
     <script>
-      if (window.location.protocol === "file:") {
-        window.location.href = "https://t16104021.github.io/pricebook/";
-      }
+    if (window.location.protocol === "file:") {
+      window.location.href = "https://t16104021.github.io/pricebook/";
+    }
     </script>
     <link rel="stylesheet" href="./styles.css?v=20260625-8" />
   </head>
@@ -38,15 +38,22 @@
           <p>追蹤產品定價、客戶售價與每一次價格異動</p>
         </div>
         <div class="top-actions">
-          <button class="icon-button" id="exportBtn" title="匯出 Excel" aria-label="匯出 Excel">
+          <button class="icon-button" id="exportBtn" title="匯出 Excel"
+            aria-label="匯出 Excel">
             <span aria-hidden="true">⇩</span>
           </button>
-          <label class="icon-button" for="importFile" title="匯入 Excel 或 JSON" aria-label="匯入 Excel 或 JSON">
+          <label class="icon-button" for="importFile" title="匯入 Excel 或 JSON"
+            aria-label="匯入 Excel 或 JSON">
             <span aria-hidden="true">⇧</span>
           </label>
-          <input id="importFile" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/json" hidden />
+          <input id="importFile" type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/json"
+            hidden />
+          <button class="secondary-button" id="aiSettingsBtn"
+            type="button">AI 設定</button>
           <button class="primary-button" id="addProductBtn">新增產品</button>
-          <button class="secondary-button" id="logoutBtn" type="button">登出</button>
+          <button class="secondary-button" id="logoutBtn"
+            type="button">登出</button>
         </div>
       </header>
 
@@ -114,9 +121,12 @@
                 <p id="detailMeta"></p>
               </div>
               <div class="detail-actions">
-                <button class="secondary-button" id="editProductBtn">編輯產品</button>
-                <button class="secondary-button" id="updateBaseBtn">更新定價</button>
-                <button class="danger-button" id="deleteProductBtn">刪除產品</button>
+                <button class="secondary-button"
+                  id="editProductBtn">編輯產品</button>
+                <button class="secondary-button"
+                  id="updateBaseBtn">更新定價</button>
+                <button class="danger-button"
+                  id="deleteProductBtn">刪除產品</button>
               </div>
             </div>
 
@@ -137,14 +147,17 @@
 
             <div class="section-heading">
               <h3>客戶售價</h3>
-              <button class="primary-button compact" id="addSaleBtn">新增售價</button>
+              <button class="primary-button compact"
+                id="addSaleBtn">新增售價</button>
             </div>
             <div class="customer-controls">
               <div class="customer-search">
-                <input id="customerSearch" type="search" autocomplete="off" placeholder="搜尋客戶名稱" />
+                <input id="customerSearch" type="search" autocomplete="off"
+                  placeholder="搜尋客戶名稱" />
               </div>
               <div class="customer-filter-row">
-                <div class="segmented customer-filter" id="customerInitialFilter"></div>
+                <div class="segmented customer-filter"
+                  id="customerInitialFilter"></div>
                 <span id="customerFilterCount">0 筆</span>
               </div>
               <div class="customer-pagination">
@@ -158,9 +171,11 @@
                   </select>
                 </label>
                 <div class="pagination-actions">
-                  <button class="secondary-button compact" id="customerPrevPage" type="button">上一頁</button>
+                  <button class="secondary-button compact" id="customerPrevPage"
+                    type="button">上一頁</button>
                   <span id="customerPageInfo">第 1 / 1 頁</span>
-                  <button class="secondary-button compact" id="customerNextPage" type="button">下一頁</button>
+                  <button class="secondary-button compact" id="customerNextPage"
+                    type="button">下一頁</button>
                 </div>
               </div>
             </div>
@@ -204,7 +219,8 @@
                 結束
                 <input id="timelineEnd" type="date" />
               </label>
-              <button class="secondary-button compact" id="clearTimelineRange" type="button">清除日期</button>
+              <button class="secondary-button compact" id="clearTimelineRange"
+                type="button">清除日期</button>
             </div>
             <div class="timeline" id="timeline"></div>
           </div>
@@ -236,7 +252,8 @@
           <input name="date" type="date" required />
         </label>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
           <button value="confirm" class="primary-button">建立</button>
         </div>
       </form>
@@ -258,7 +275,8 @@
           <input name="note" placeholder="例：原料成本調整" />
         </label>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
           <button value="confirm" class="primary-button">更新</button>
         </div>
       </form>
@@ -280,7 +298,8 @@
           <input name="category" required />
         </label>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
           <button value="confirm" class="primary-button">儲存</button>
         </div>
       </form>
@@ -291,7 +310,8 @@
         <h2>刪除產品</h2>
         <p class="dialog-note" id="deleteProductMessage"></p>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
           <button value="confirm" class="danger-button">刪除</button>
         </div>
       </form>
@@ -302,7 +322,8 @@
         <h2>刪除時間紀錄</h2>
         <p class="dialog-note" id="deleteTimelineMessage"></p>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
           <button value="confirm" class="danger-button">刪除</button>
         </div>
       </form>
@@ -329,7 +350,8 @@
           <input name="note" placeholder="例：年度合約價" />
         </label>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
           <button value="confirm" class="primary-button">儲存</button>
         </div>
       </form>
@@ -349,8 +371,26 @@
           <input name="confirmPassword" type="password" autocomplete="new-password" minlength="6" required />
         </label>
         <div class="dialog-actions">
-          <button value="cancel" class="secondary-button" formnovalidate>取消</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
           <button value="confirm" class="primary-button">更新密碼</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="aiSettingsDialog" class="wide-dialog">
+      <form method="dialog" id="aiSettingsForm">
+        <h2>AI 回覆風格設定</h2>
+        <label>
+          回覆指令
+          <textarea name="instructions" rows="11" spellcheck="false"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button value="reset" class="secondary-button"
+            formnovalidate>恢復預設</button>
+          <button value="cancel" class="secondary-button"
+            formnovalidate>取消</button>
+          <button value="confirm" class="primary-button">儲存</button>
         </div>
       </form>
     </dialog>
@@ -366,7 +406,8 @@
     </template>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="./supabase-config.js?v=20260625-1"></script>
     <script src="./app.js?v=20260626-3"></script>
   </body>

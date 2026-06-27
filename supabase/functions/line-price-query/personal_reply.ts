@@ -27,18 +27,20 @@ function formatCustomerPrice(context: PersonalReplyContext): string {
     }`;
 }
 
-function personalReplyInstructions(): string {
-  return [
-    "你是 Jimmy 的 LINE 客服回覆助手。",
-    "只能根據使用者訊息中的資料回覆，不得自行推測價格、折扣、庫存或交期。",
-    "不要提產品定價、定價日期、價格最後更新日或售價日期。",
-    "只可以提客戶名稱、產品編號、產品名稱、客戶售價與備註。",
-    "語氣要像 Jimmy 平常回客戶 LINE 的方式：簡潔有力、熱心、親和。",
-    "可使用「優惠價」「目前是」「先給您參考」「需要的話我再確認」這類短句。",
-    "範例風格：「ABC-100 目前優惠價 $980，先給您參考。」",
-    "可以說幫忙確認庫存，但不可直接宣稱有庫存或承諾交期。",
-    "回覆控制在 1 到 2 句，不要說資料庫顯示或系統查詢到。",
-  ].join("\n");
+export const DEFAULT_AI_REPLY_INSTRUCTIONS = [
+  "你是 Jimmy 的 LINE 客服回覆助手。",
+  "只能根據使用者訊息中的資料回覆，不得自行推測價格、折扣、庫存或交期。",
+  "不要提產品定價、定價日期、價格最後更新日或售價日期。",
+  "只可以提客戶名稱、產品編號、產品名稱、客戶售價與備註。",
+  "語氣要像 Jimmy 平常回客戶 LINE 的方式：簡潔有力、熱心、親和。",
+  "可使用「優惠價」「目前是」「先給您參考」「需要的話我再確認」這類短句。",
+  "範例風格：「ABC-100 目前優惠價 $980，先給您參考。」",
+  "可以說幫忙確認庫存，但不可直接宣稱有庫存或承諾交期。",
+  "回覆控制在 1 到 2 句，不要說資料庫顯示或系統查詢到。",
+].join("\n");
+
+function personalReplyInstructions(customInstructions?: string): string {
+  return customInstructions?.trim() || DEFAULT_AI_REPLY_INSTRUCTIONS;
 }
 
 function personalReplyPayload(context: PersonalReplyContext): string {
@@ -84,6 +86,7 @@ export async function createOpenAIPersonalReply(
   apiKey: string | undefined,
   model = "gpt-5-mini",
   fetchImpl: typeof fetch = fetch,
+  customInstructions?: string,
 ): Promise<string | null> {
   if (!apiKey) return null;
 
@@ -98,7 +101,7 @@ export async function createOpenAIPersonalReply(
       input: [
         {
           role: "system",
-          content: personalReplyInstructions(),
+          content: personalReplyInstructions(customInstructions),
         },
         {
           role: "user",
@@ -119,6 +122,7 @@ export async function createGeminiPersonalReply(
   apiKey: string | undefined,
   model = "gemini-2.5-flash",
   fetchImpl: typeof fetch = fetch,
+  customInstructions?: string,
 ): Promise<string | null> {
   if (!apiKey) return null;
 
@@ -134,7 +138,7 @@ export async function createGeminiPersonalReply(
     },
     body: JSON.stringify({
       systemInstruction: {
-        parts: [{ text: personalReplyInstructions() }],
+        parts: [{ text: personalReplyInstructions(customInstructions) }],
       },
       contents: [{
         role: "user",

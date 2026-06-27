@@ -147,3 +147,37 @@ Deno.test("skips Gemini personalized reply when no API key is configured", async
   assertEquals(reply, null);
   assertEquals(fetchCalls, 0);
 });
+
+Deno.test("uses custom AI reply instructions when configured", async () => {
+  let requestBody = "";
+  const mockFetch = ((_url: string | URL | Request, init?: RequestInit) => {
+    requestBody = String(init?.body);
+    return Promise.resolve(
+      Response.json({
+        candidates: [{
+          content: {
+            parts: [{ text: "ABC-100 目前優惠價 NT$980，先給您參考。" }],
+          },
+        }],
+      }),
+    );
+  }) as typeof fetch;
+
+  const reply = await createGeminiPersonalReply(
+    {
+      customer: "長青商行",
+      productSku: "ABC-100",
+      productName: "高效濾芯",
+      customerPrice: { price: 980, date: "2026-06-27" },
+      note: "無",
+    },
+    "gemini-key",
+    "gemini-test",
+    mockFetch,
+    "自訂 AI 風格：超短句，不要稱謂。",
+  );
+
+  assertEquals(reply, "ABC-100 目前優惠價 NT$980，先給您參考。");
+  assertStringIncludes(requestBody, "自訂 AI 風格：超短句，不要稱謂。");
+  assertFalse(requestBody.includes("簡潔有力、熱心、親和"));
+});

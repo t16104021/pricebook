@@ -230,6 +230,25 @@ Deno.test("sends fixed and personalized replies for a found price", async () => 
   }]);
 });
 
+Deno.test("passes custom AI reply instructions from payload settings", async () => {
+  const payloadWithSettings: PricebookPayload = {
+    ...payload,
+    settings: {
+      aiReplyInstructions: "自訂後台 AI 風格",
+    },
+  };
+  const { handler, personalReplyContexts } = setup({
+    loadPayload: () => Promise.resolve(payloadWithSettings),
+  });
+
+  await handler(post(JSON.stringify({ events: [event()] })));
+
+  assertEquals(
+    personalReplyContexts[0].aiReplyInstructions,
+    "自訂後台 AI 風格",
+  );
+});
+
 Deno.test("falls back to the fixed reply when personalized reply is unavailable", async () => {
   const { handler, replies } = setup({
     createPersonalReply: () => Promise.reject(new Error("LLM timeout")),

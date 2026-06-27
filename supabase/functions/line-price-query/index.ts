@@ -314,9 +314,17 @@ export function createRuntimeHandler(
         context,
         geminiKey,
         geminiModel,
+        fetch,
+        context.aiReplyInstructions,
       );
       if (geminiReply) return geminiReply;
-      return createOpenAIPersonalReply(context, openAIKey, openAIModel);
+      return createOpenAIPersonalReply(
+        context,
+        openAIKey,
+        openAIModel,
+        fetch,
+        context.aiReplyInstructions,
+      );
     },
     reply: replyToLine,
   });

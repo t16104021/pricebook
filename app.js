@@ -1,10 +1,24 @@
 const STORAGE_KEY_PREFIX = "pricing-manager-data-v1";
 
 const emptyData = {
+  settings: {},
   products: [],
 };
 
+const DEFAULT_AI_REPLY_INSTRUCTIONS = [
+  "你是 Jimmy 的 LINE 客服回覆助手。",
+  "只能根據使用者訊息中的資料回覆，不得自行推測價格、折扣、庫存或交期。",
+  "不要提產品定價、定價日期、價格最後更新日或售價日期。",
+  "只可以提客戶名稱、產品編號、產品名稱、客戶售價與備註。",
+  "語氣要像 Jimmy 平常回客戶 LINE 的方式：簡潔有力、熱心、親和。",
+  "可使用「優惠價」「目前是」「先給您參考」「需要的話我再確認」這類短句。",
+  "範例風格：「ABC-100 目前優惠價 $980，先給您參考。」",
+  "可以說幫忙確認庫存，但不可直接宣稱有庫存或承諾交期。",
+  "回覆控制在 1 到 2 句，不要說資料庫顯示或系統查詢到。",
+].join("\n");
+
 const seedData = {
+  settings: {},
   products: [
     {
       id: "p-1001",
@@ -129,6 +143,9 @@ const els = {
   addSaleBtn: document.querySelector("#addSaleBtn"),
   exportBtn: document.querySelector("#exportBtn"),
   importFile: document.querySelector("#importFile"),
+  aiSettingsBtn: document.querySelector("#aiSettingsBtn"),
+  aiSettingsDialog: document.querySelector("#aiSettingsDialog"),
+  aiSettingsForm: document.querySelector("#aiSettingsForm"),
   productDialog: document.querySelector("#productDialog"),
   productForm: document.querySelector("#productForm"),
   editProductDialog: document.querySelector("#editProductDialog"),
@@ -163,14 +180,29 @@ function loadLocalData() {
 
   try {
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed.products) ? parsed : structuredClone(seedData);
+    return Array.isArray(parsed.products)
+      ? ensureDataShape(parsed)
+      : structuredClone(seedData);
   } catch {
     return structuredClone(seedData);
   }
 }
 
+function ensureDataShape(value) {
+  const products = Array.isArray(value?.products) ? value.products : [];
+  return {
+    ...value,
+    settings: value?.settings && typeof value.settings === "object"
+      ? value.settings
+      : {},
+    products,
+  };
+}
+
 function localStorageKey() {
-  return currentUserId ? `${STORAGE_KEY_PREFIX}-${currentUserId}` : STORAGE_KEY_PREFIX;
+  return currentUserId
+    ? `${STORAGE_KEY_PREFIX}-${currentUserId}`
+    : STORAGE_KEY_PREFIX;
 }
 
 function showAuth(message = "") {
@@ -207,11 +239,16 @@ function showApp() {
 
 function initSupabase() {
   if (!hasSupabaseConfig() || !window.supabase) {
-    showAuth("尚未設定 Supabase。請先依照 SUPABASE.md 建立專案並填入 supabase-config.js。");
+    showAuth(
+      "尚未設定 Supabase。請先依照 SUPABASE.md 建立專案並填入 supabase-config.js。",
+    );
     return;
   }
 
-  dbClient = window.supabase.createClient(window.PRICEBOOK_SUPABASE.url, window.PRICEBOOK_SUPABASE.anonKey);
+  dbClient = window.supabase.createClient(
+    window.PRICEBOOK_SUPABASE.url,
+    window.PRICEBOOK_SUPABASE.anonKey,
+  );
   dbClient.auth.onAuthStateChange((event) => {
     if (event === "PASSWORD_RECOVERY") {
       openResetPasswordDialog();
@@ -264,7 +301,7 @@ async function loadCloudData(userId) {
     return true;
   }
 
-  data = row.payload;
+  data = ensureDataShape(row.payload);
   selectedProductId = data.products[0]?.id ?? null;
   isCloudReady = true;
   localStorage.setItem(localStorageKey(), JSON.stringify(data, null, 2));
@@ -272,6 +309,7 @@ async function loadCloudData(userId) {
 }
 
 function saveData() {
+  data = ensureDataShape(data);
   localStorage.setItem(localStorageKey(), JSON.stringify(data, null, 2));
   if (!isCloudReady) return;
 
@@ -304,7 +342,10 @@ async function signIn(email, password) {
   els.authSubmit.textContent = "登入中";
 
   try {
-    const { data: authData, error } = await dbClient.auth.signInWithPassword({ email, password });
+    const { data: authData, error } = await dbClient.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) {
       showAuth(authMessage(error));
       return;
@@ -395,7 +436,13 @@ function getCurrentSale(sale) {
 }
 
 function getCustomers() {
-  return [...new Set(data.products.flatMap((product) => product.sales.map((sale) => sale.customer)))].sort();
+  return [
+    ...new Set(
+      data.products.flatMap((product) =>
+        product.sales.map((sale) => sale.customer)
+      ),
+    ),
+  ].sort();
 }
 
 function customerInitialKey(name) {
@@ -417,25 +464,37 @@ function commandParts(raw) {
   const trimmed = raw.trim();
   const match = trimmed.match(/^\/(\w+)\s*(.*)$/);
   if (!match) return { command: "all", term: trimmed.toLowerCase() };
-  return { command: match[1].toLowerCase(), term: match[2].trim().toLowerCase() };
+  return {
+    command: match[1].toLowerCase(),
+    term: match[2].trim().toLowerCase(),
+  };
 }
 
 function productMatches(product, parsed) {
   const currentBase = getCurrentBase(product);
   const customerText = product.sales.map((sale) => sale.customer).join(" ");
-  const haystack = `${product.sku} ${product.name} ${product.category} ${customerText}`.toLowerCase();
+  const haystack =
+    `${product.sku} ${product.name} ${product.category} ${customerText}`
+      .toLowerCase();
 
   if (parsed.command === "changed") {
     const dates = [
       ...product.basePrices.map((price) => price.date),
-      ...product.sales.flatMap((sale) => sale.prices.map((price) => price.date)),
+      ...product.sales.flatMap((sale) =>
+        sale.prices.map((price) => price.date)
+      ),
     ].sort((a, b) => b.localeCompare(a));
     const newest = dates[0] ?? "";
     return newest >= offsetDate(-30) && haystack.includes(parsed.term);
   }
 
-  if (parsed.command === "product") return `${product.sku} ${product.name} ${product.category}`.toLowerCase().includes(parsed.term);
-  if (parsed.command === "customer") return customerText.toLowerCase().includes(parsed.term);
+  if (parsed.command === "product") {
+    return `${product.sku} ${product.name} ${product.category}`.toLowerCase()
+      .includes(parsed.term);
+  }
+  if (parsed.command === "customer") {
+    return customerText.toLowerCase().includes(parsed.term);
+  }
   if (parsed.command === "history") {
     const timelineText = buildTimeline(product)
       .map((item) => `${item.date} ${item.label} ${item.note} ${item.price}`)
@@ -443,7 +502,9 @@ function productMatches(product, parsed) {
       .toLowerCase();
     return timelineText.includes(parsed.term);
   }
-  if (parsed.command === "price") return String(currentBase.price).includes(parsed.term);
+  if (parsed.command === "price") {
+    return String(currentBase.price).includes(parsed.term);
+  }
 
   return haystack.includes(parsed.term);
 }
@@ -478,16 +539,19 @@ function buildTimeline(product) {
       note: entry.note || "客戶售價更新",
       saleIndex,
       priceIndex,
-    })),
+    }))
   );
 
-  return [...baseItems, ...saleItems].sort((a, b) => b.date.localeCompare(a.date));
+  return [...baseItems, ...saleItems].sort((a, b) =>
+    b.date.localeCompare(a.date)
+  );
 }
 
 function renderSummary() {
   const customers = getCustomers();
   const priceCount = data.products.reduce((total, product) => {
-    return total + product.basePrices.length + product.sales.reduce((sum, sale) => sum + sale.prices.length, 0);
+    return total + product.basePrices.length +
+      product.sales.reduce((sum, sale) => sum + sale.prices.length, 0);
   }, 0);
   const latestDate = getAllDates().sort((a, b) => b.localeCompare(a))[0];
 
@@ -496,7 +560,9 @@ function renderSummary() {
   els.priceCount.textContent = priceCount;
   els.lastUpdated.textContent = formatDate(latestDate);
   els.dataSource.textContent = isCloudReady ? "Supabase" : "離線";
-  els.customerOptions.innerHTML = customers.map((customer) => `<option value="${escapeHtml(customer)}"></option>`).join("");
+  els.customerOptions.innerHTML = customers.map((customer) =>
+    `<option value="${escapeHtml(customer)}"></option>`
+  ).join("");
 }
 
 function renderProductList() {
@@ -509,11 +575,14 @@ function renderProductList() {
   }
 
   products.forEach((product) => {
-    const node = els.productItemTemplate.content.firstElementChild.cloneNode(true);
+    const node = els.productItemTemplate.content.firstElementChild.cloneNode(
+      true,
+    );
     const currentBase = getCurrentBase(product);
     node.classList.toggle("active", product.id === selectedProductId);
     node.querySelector("strong").textContent = product.name;
-    node.querySelector("small").textContent = `${product.sku} · ${product.category} · ${product.sales.length} 位客戶`;
+    node.querySelector("small").textContent =
+      `${product.sku} · ${product.category} · ${product.sales.length} 位客戶`;
     node.querySelector(".item-price").textContent = currency(currentBase.price);
     node.addEventListener("click", () => {
       selectedProductId = product.id;
@@ -543,10 +612,13 @@ function renderDetail() {
 
   els.detailSku.textContent = product.sku;
   els.detailName.textContent = product.name;
-  els.detailMeta.textContent = `${product.category} · ${product.sales.length} 位客戶有設定售價`;
+  els.detailMeta.textContent =
+    `${product.category} · ${product.sales.length} 位客戶有設定售價`;
   els.detailBasePrice.textContent = currency(currentBase.price);
   els.detailBaseDate.textContent = formatDate(currentBase.date);
-  els.detailRange.textContent = salePrices.length ? `${currency(minSale)} - ${currency(maxSale)}` : "尚未設定";
+  els.detailRange.textContent = salePrices.length
+    ? `${currency(minSale)} - ${currency(maxSale)}`
+    : "尚未設定";
 
   renderSales(product, currentBase.price);
   renderTimeline(product);
@@ -557,20 +629,29 @@ function renderSales(product, basePrice) {
   renderCustomerInitialFilter(product);
 
   if (!product.sales.length) {
-    els.salesTable.innerHTML = `<tr><td class="empty-row" colspan="5">尚未設定客戶售價</td></tr>`;
+    els.salesTable.innerHTML =
+      `<tr><td class="empty-row" colspan="5">尚未設定客戶售價</td></tr>`;
     els.customerFilterCount.textContent = "0 筆";
     renderCustomerPagination(1);
     return;
   }
 
   const filteredSales = product.sales
-    .filter((sale) => !customerSearch || sale.customer.toLowerCase().includes(customerSearch.toLowerCase()))
-    .filter((sale) => customerInitial === "all" || customerInitialKey(sale.customer) === customerInitial);
+    .filter((sale) =>
+      !customerSearch ||
+      sale.customer.toLowerCase().includes(customerSearch.toLowerCase())
+    )
+    .filter((sale) =>
+      customerInitial === "all" ||
+      customerInitialKey(sale.customer) === customerInitial
+    );
 
-  els.customerFilterCount.textContent = `${filteredSales.length} / ${product.sales.length} 筆`;
+  els.customerFilterCount.textContent =
+    `${filteredSales.length} / ${product.sales.length} 筆`;
 
   if (!filteredSales.length) {
-    els.salesTable.innerHTML = `<tr><td class="empty-row" colspan="5">沒有符合條件的客戶售價</td></tr>`;
+    els.salesTable.innerHTML =
+      `<tr><td class="empty-row" colspan="5">沒有符合條件的客戶售價</td></tr>`;
     customerPage = 1;
     renderCustomerPagination(1);
     return;
@@ -579,10 +660,16 @@ function renderSales(product, basePrice) {
   const sortedSales = filteredSales
     .map((sale) => ({ sale, current: getCurrentSale(sale) }))
     .sort((a, b) => a.sale.customer.localeCompare(b.sale.customer, "zh-Hant"));
-  const pageSize = customerPageSize === "all" ? sortedSales.length : Number(customerPageSize);
-  const totalPages = customerPageSize === "all" ? 1 : Math.max(1, Math.ceil(sortedSales.length / pageSize));
+  const pageSize = customerPageSize === "all"
+    ? sortedSales.length
+    : Number(customerPageSize);
+  const totalPages = customerPageSize === "all"
+    ? 1
+    : Math.max(1, Math.ceil(sortedSales.length / pageSize));
   customerPage = Math.min(customerPage, totalPages);
-  const pageStart = customerPageSize === "all" ? 0 : (customerPage - 1) * pageSize;
+  const pageStart = customerPageSize === "all"
+    ? 0
+    : (customerPage - 1) * pageSize;
   const visibleSales = sortedSales.slice(pageStart, pageStart + pageSize);
 
   renderCustomerPagination(totalPages);
@@ -594,10 +681,17 @@ function renderSales(product, basePrice) {
         <td>${escapeHtml(sale.customer)}</td>
         <td><strong>${currency(current.price)}</strong></td>
         <td>${formatDate(current.date)}</td>
-        <td class="${diff >= 0 ? "margin-positive" : "margin-negative"}">${diff >= 0 ? "+" : ""}${currency(diff)}</td>
-        <td><button class="secondary-button compact" data-customer="${escapeHtml(sale.customer)}">更新</button></td>
+        <td class="${diff >= 0 ? "margin-positive" : "margin-negative"}">${
+      diff >= 0 ? "+" : ""
+    }${currency(diff)}</td>
+        <td><button class="secondary-button compact" data-customer="${
+      escapeHtml(sale.customer)
+    }">更新</button></td>
       `;
-    tr.querySelector("button").addEventListener("click", () => openSaleDialog(sale.customer, current.price));
+    tr.querySelector("button").addEventListener(
+      "click",
+      () => openSaleDialog(sale.customer, current.price),
+    );
     els.salesTable.append(tr);
   });
 }
@@ -609,19 +703,26 @@ function renderCustomerPagination(totalPages) {
 }
 
 function renderCustomerInitialFilter(product) {
-  const initials = [...new Set(product.sales.map((sale) => customerInitialKey(sale.customer)))].sort((a, b) =>
-    a.localeCompare(b, "zh-Hant"),
-  );
+  const initials = [
+    ...new Set(product.sales.map((sale) => customerInitialKey(sale.customer))),
+  ].sort((a, b) => a.localeCompare(b, "zh-Hant"));
 
   if (customerInitial !== "all" && !initials.includes(customerInitial)) {
     customerInitial = "all";
   }
 
-  const buttons = [{ key: "all", label: "全部" }, ...initials.map((initial) => ({ key: initial, label: initial }))];
+  const buttons = [
+    { key: "all", label: "全部" },
+    ...initials.map((initial) => ({ key: initial, label: initial })),
+  ];
   els.customerInitialFilter.innerHTML = buttons
     .map(
       (button) =>
-        `<button class="${button.key === customerInitial ? "active" : ""}" data-initial="${escapeHtml(button.key)}">${escapeHtml(button.label)}</button>`,
+        `<button class="${
+          button.key === customerInitial ? "active" : ""
+        }" data-initial="${escapeHtml(button.key)}">${
+          escapeHtml(button.label)
+        }</button>`,
     )
     .join("");
 }
@@ -629,14 +730,25 @@ function renderCustomerInitialFilter(product) {
 function renderTimeline(product) {
   const items = buildTimeline(product)
     .filter((item) => timelineMode === "all" || item.type === timelineMode)
-    .filter((item) => !timelineCustomerSearch || (item.type === "sale" && item.label.toLowerCase().includes(timelineCustomerSearch.toLowerCase())))
+    .filter((item) =>
+      !timelineCustomerSearch ||
+      (item.type === "sale" &&
+        item.label.toLowerCase().includes(timelineCustomerSearch.toLowerCase()))
+    )
     .filter((item) => !timelineStart || item.date >= timelineStart)
     .filter((item) => !timelineEnd || item.date <= timelineEnd)
-    .sort((a, b) => (timelineSort === "asc" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)));
+    .sort((
+      a,
+      b,
+    ) => (timelineSort === "asc"
+      ? a.date.localeCompare(b.date)
+      : b.date.localeCompare(a.date))
+    );
   els.timeline.innerHTML = "";
 
   if (!items.length) {
-    els.timeline.innerHTML = `<div class="empty-row">沒有符合條件的時間紀錄</div>`;
+    els.timeline.innerHTML =
+      `<div class="empty-row">沒有符合條件的時間紀錄</div>`;
     return;
   }
 
@@ -651,11 +763,16 @@ function renderTimeline(product) {
           <strong>${escapeHtml(item.label)} · ${currency(item.price)}</strong>
           <span>${escapeHtml(item.note)}</span>
         </div>
-        <span class="badge ${item.type === "sale" ? "sale" : ""}">${item.type === "sale" ? "客戶售價" : "產品定價"}</span>
+        <span class="badge ${item.type === "sale" ? "sale" : ""}">${
+      item.type === "sale" ? "客戶售價" : "產品定價"
+    }</span>
       </div>
     `;
     addTimelineSwipe(row, item);
-    row.querySelector(".timeline-delete-action").addEventListener("click", () => openDeleteTimelineDialog(item));
+    row.querySelector(".timeline-delete-action").addEventListener(
+      "click",
+      () => openDeleteTimelineDialog(item),
+    );
     els.timeline.append(row);
   });
 }
@@ -724,7 +841,10 @@ function setQuickFilterState() {
   const parsed = commandParts(query);
   els.quickFilters.querySelectorAll("button").forEach((button) => {
     const buttonCommand = button.dataset.command.trim().replace("/", "");
-    button.classList.toggle("active", parsed.command === (buttonCommand || "all"));
+    button.classList.toggle(
+      "active",
+      parsed.command === (buttonCommand || "all"),
+    );
   });
 }
 
@@ -765,7 +885,8 @@ function openDeleteProductDialog() {
   const product = getSelectedProduct();
   if (!product) return;
 
-  els.deleteProductMessage.textContent = `確定要刪除「${product.name}」嗎？此操作會一併移除產品定價、客戶售價和時間軸紀錄。`;
+  els.deleteProductMessage.textContent =
+    `確定要刪除「${product.name}」嗎？此操作會一併移除產品定價、客戶售價和時間軸紀錄。`;
   els.deleteProductDialog.showModal();
 }
 
@@ -787,6 +908,32 @@ function openSaleDialog(customer = "", price = "") {
   els.saleDialog.showModal();
 }
 
+function getAiReplyInstructions() {
+  return data.settings?.aiReplyInstructions?.trim() ||
+    DEFAULT_AI_REPLY_INSTRUCTIONS;
+}
+
+function openAiSettingsDialog() {
+  data = ensureDataShape(data);
+  els.aiSettingsForm.reset();
+  els.aiSettingsForm.elements.instructions.value = getAiReplyInstructions();
+  els.aiSettingsDialog.showModal();
+}
+
+function saveAiSettingsFromForm() {
+  data = ensureDataShape(data);
+  data.settings.aiReplyInstructions =
+    els.aiSettingsForm.elements.instructions.value.trim() ||
+    DEFAULT_AI_REPLY_INSTRUCTIONS;
+  saveData();
+}
+
+function resetAiSettingsToDefault() {
+  data = ensureDataShape(data);
+  data.settings.aiReplyInstructions = DEFAULT_AI_REPLY_INSTRUCTIONS;
+  saveData();
+}
+
 function addProductFromForm() {
   const form = els.productForm.elements;
   const product = {
@@ -794,7 +941,11 @@ function addProductFromForm() {
     sku: form.sku.value.trim(),
     name: form.name.value.trim(),
     category: form.category.value.trim(),
-    basePrices: [{ price: Number(form.price.value), date: form.date.value, note: "初始定價" }],
+    basePrices: [{
+      price: Number(form.price.value),
+      date: form.date.value,
+      note: "初始定價",
+    }],
     sales: [],
   };
 
@@ -820,17 +971,26 @@ function deleteSelectedProduct() {
   const product = getSelectedProduct();
   if (!product) return;
 
-  const productIndex = data.products.findIndex((item) => item.id === product.id);
+  const productIndex = data.products.findIndex((item) =>
+    item.id === product.id
+  );
   data.products = data.products.filter((item) => item.id !== product.id);
-  selectedProductId = data.products[Math.min(productIndex, data.products.length - 1)]?.id ?? null;
+  selectedProductId =
+    data.products[Math.min(productIndex, data.products.length - 1)]?.id ?? null;
   saveData();
   render();
 }
 
 function openDeleteTimelineDialog(item) {
   timelineDeleteTarget = item;
-  const typeLabel = item.type === "sale" ? `客戶售價「${item.label}」` : "產品定價";
-  els.deleteTimelineMessage.textContent = `確定要刪除 ${formatDate(item.date)} 的${typeLabel} ${currency(item.price)} 嗎？此操作會從時間軸和價格紀錄中移除。`;
+  const typeLabel = item.type === "sale"
+    ? `客戶售價「${item.label}」`
+    : "產品定價";
+  els.deleteTimelineMessage.textContent = `確定要刪除 ${
+    formatDate(item.date)
+  } 的${typeLabel} ${
+    currency(item.price)
+  } 嗎？此操作會從時間軸和價格紀錄中移除。`;
   els.deleteTimelineDialog.showModal();
 }
 
@@ -915,7 +1075,7 @@ function basePriceRows() {
       生效日期: entry.date,
       產品定價: Number(entry.price),
       備註: entry.note || "",
-    })),
+    }))
   );
 }
 
@@ -929,14 +1089,16 @@ function salePriceRows() {
         生效日期: entry.date,
         客戶售價: Number(entry.price),
         備註: entry.note || "",
-      })),
-    ),
+      }))
+    )
   );
 }
 
 function appendSheet(workbook, name, rows, headers) {
   const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
-  worksheet["!cols"] = headers.map((header) => ({ wch: Math.max(12, header.length * 2 + 4) }));
+  worksheet["!cols"] = headers.map((header) => ({
+    wch: Math.max(12, header.length * 2 + 4),
+  }));
   XLSX.utils.book_append_sheet(workbook, worksheet, name);
 }
 
@@ -944,18 +1106,55 @@ function exportData() {
   if (!ensureExcelReady()) return;
 
   const workbook = XLSX.utils.book_new();
-  appendSheet(workbook, "產品", productRows(), ["product_id", "SKU", "產品名稱", "分類"]);
-  appendSheet(workbook, "產品定價", basePriceRows(), ["product_id", "SKU", "生效日期", "產品定價", "備註"]);
-  appendSheet(workbook, "客戶售價", salePriceRows(), ["product_id", "SKU", "客戶", "生效日期", "客戶售價", "備註"]);
+  appendSheet(workbook, "產品", productRows(), [
+    "product_id",
+    "SKU",
+    "產品名稱",
+    "分類",
+  ]);
+  appendSheet(workbook, "產品定價", basePriceRows(), [
+    "product_id",
+    "SKU",
+    "生效日期",
+    "產品定價",
+    "備註",
+  ]);
+  appendSheet(workbook, "客戶售價", salePriceRows(), [
+    "product_id",
+    "SKU",
+    "客戶",
+    "生效日期",
+    "客戶售價",
+    "備註",
+  ]);
   appendSheet(
     workbook,
     "使用說明",
     [
-      { 項目: "匯入方式", 說明: "可直接編輯此 Excel 後匯入。匯入會以整份 Excel 取代目前資料。" },
-      { 項目: "新增產品", 說明: "在「產品」填 SKU、產品名稱、分類；product_id 可留空，系統會自動建立。" },
-      { 項目: "新增產品定價", 說明: "在「產品定價」填 SKU、生效日期、產品定價、備註。日期格式建議 yyyy-mm-dd。" },
-      { 項目: "新增客戶售價", 說明: "在「客戶售價」填 SKU、客戶、生效日期、客戶售價、備註。日期格式建議 yyyy-mm-dd。" },
-      { 項目: "對應規則", 說明: "product_id 優先，其次用 SKU 對應產品。大量輸入時請保持 SKU 唯一。" },
+      {
+        項目: "匯入方式",
+        說明: "可直接編輯此 Excel 後匯入。匯入會以整份 Excel 取代目前資料。",
+      },
+      {
+        項目: "新增產品",
+        說明:
+          "在「產品」填 SKU、產品名稱、分類；product_id 可留空，系統會自動建立。",
+      },
+      {
+        項目: "新增產品定價",
+        說明:
+          "在「產品定價」填 SKU、生效日期、產品定價、備註。日期格式建議 yyyy-mm-dd。",
+      },
+      {
+        項目: "新增客戶售價",
+        說明:
+          "在「客戶售價」填 SKU、客戶、生效日期、客戶售價、備註。日期格式建議 yyyy-mm-dd。",
+      },
+      {
+        項目: "對應規則",
+        說明:
+          "product_id 優先，其次用 SKU 對應產品。大量輸入時請保持 SKU 唯一。",
+      },
     ],
     ["項目", "說明"],
   );
@@ -964,7 +1163,10 @@ function exportData() {
 }
 
 function importData(file) {
-  if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+  if (
+    file.name.toLowerCase().endsWith(".xlsx") ||
+    file.name.toLowerCase().endsWith(".xls")
+  ) {
     importExcelData(file);
     return;
   }
@@ -973,8 +1175,10 @@ function importData(file) {
   reader.addEventListener("load", () => {
     try {
       const imported = JSON.parse(reader.result);
-      if (!Array.isArray(imported.products)) throw new Error("Missing products");
-      data = imported;
+      if (!Array.isArray(imported.products)) {
+        throw new Error("Missing products");
+      }
+      data = ensureDataShape(imported);
       selectedProductId = data.products[0]?.id ?? null;
       saveData();
       render();
@@ -992,7 +1196,9 @@ function normalizeHeader(value) {
 function rowValue(row, names) {
   for (const name of names) {
     const value = row[name];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
   }
   return "";
 }
@@ -1007,7 +1213,9 @@ function normalizeDate(value) {
   const normalized = text.replaceAll("/", "-").replaceAll(".", "-");
   const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (match) {
-    return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+    return `${match[1]}-${match[2].padStart(2, "0")}-${
+      match[3].padStart(2, "0")
+    }`;
   }
 
   const parsed = new Date(text);
@@ -1035,7 +1243,11 @@ function sheetRows(workbook, sheetName) {
   return XLSX.utils
     .sheet_to_json(worksheet, { defval: "", raw: false })
     .map((row) =>
-      Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeHeader(key), value])),
+      Object.fromEntries(
+        Object.entries(row).map((
+          [key, value],
+        ) => [normalizeHeader(key), value]),
+      )
     );
 }
 
@@ -1048,7 +1260,8 @@ function workbookToData(workbook) {
     const name = String(rowValue(row, ["產品名稱", "name"])).trim();
     if (!sku || !name) return;
 
-    const id = String(rowValue(row, ["product_id", "產品ID", "id"])).trim() || makeProductId(sku);
+    const id = String(rowValue(row, ["product_id", "產品ID", "id"])).trim() ||
+      makeProductId(sku);
     const product = {
       id,
       sku,
@@ -1104,14 +1317,20 @@ function workbookToData(workbook) {
 
   products.forEach((product) => {
     product.basePrices.sort((a, b) => a.date.localeCompare(b.date));
-    product.sales.forEach((sale) => sale.prices.sort((a, b) => a.date.localeCompare(b.date)));
+    product.sales.forEach((sale) =>
+      sale.prices.sort((a, b) => a.date.localeCompare(b.date))
+    );
     if (!product.basePrices.length) {
-      product.basePrices.push({ price: 0, date: today(), note: "匯入時未提供定價" });
+      product.basePrices.push({
+        price: 0,
+        date: today(),
+        note: "匯入時未提供定價",
+      });
     }
   });
 
   if (!products.length) throw new Error("Missing products");
-  return { products };
+  return { settings: data.settings ?? {}, products };
 }
 
 function importExcelData(file) {
@@ -1120,13 +1339,18 @@ function importExcelData(file) {
   const reader = new FileReader();
   reader.addEventListener("load", () => {
     try {
-      const workbook = XLSX.read(reader.result, { type: "array", cellDates: true });
+      const workbook = XLSX.read(reader.result, {
+        type: "array",
+        cellDates: true,
+      });
       data = workbookToData(workbook);
       selectedProductId = data.products[0]?.id ?? null;
       saveData();
       render();
     } catch {
-      alert("匯入失敗，請確認 Excel 內含「產品」、「產品定價」、「客戶售價」工作表，且必要欄位已填寫。");
+      alert(
+        "匯入失敗，請確認 Excel 內含「產品」、「產品定價」、「客戶售價」工作表，且必要欄位已填寫。",
+      );
     }
   });
   reader.readAsArrayBuffer(file);
@@ -1181,7 +1405,9 @@ els.customerInitialFilter.addEventListener("click", (event) => {
 });
 
 els.customerPageSize.addEventListener("change", (event) => {
-  customerPageSize = event.target.value === "all" ? "all" : Number(event.target.value);
+  customerPageSize = event.target.value === "all"
+    ? "all"
+    : Number(event.target.value);
   customerPage = 1;
   renderDetail();
 });
@@ -1200,7 +1426,9 @@ els.timelineMode.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   timelineMode = button.dataset.mode;
-  els.timelineMode.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+  els.timelineMode.querySelectorAll("button").forEach((item) =>
+    item.classList.toggle("active", item === button)
+  );
   renderDetail();
 });
 
@@ -1208,7 +1436,9 @@ els.timelineSort.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   timelineSort = button.dataset.sort;
-  els.timelineSort.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === button));
+  els.timelineSort.querySelectorAll("button").forEach((item) =>
+    item.classList.toggle("active", item === button)
+  );
   renderDetail();
 });
 
@@ -1241,6 +1471,7 @@ els.deleteProductBtn.addEventListener("click", openDeleteProductDialog);
 els.updateBaseBtn.addEventListener("click", openBaseDialog);
 els.addSaleBtn.addEventListener("click", () => openSaleDialog());
 els.exportBtn.addEventListener("click", exportData);
+els.aiSettingsBtn.addEventListener("click", openAiSettingsDialog);
 els.importFile.addEventListener("change", (event) => {
   const [file] = event.target.files;
   if (file) importData(file);
@@ -1256,7 +1487,9 @@ els.editProductDialog.addEventListener("close", () => {
 });
 
 els.deleteProductDialog.addEventListener("close", () => {
-  if (els.deleteProductDialog.returnValue === "confirm") deleteSelectedProduct();
+  if (els.deleteProductDialog.returnValue === "confirm") {
+    deleteSelectedProduct();
+  }
 });
 
 els.deleteTimelineDialog.addEventListener("close", () => {
@@ -1296,6 +1529,11 @@ els.resetPasswordDialog.addEventListener("close", async () => {
     showApp();
     render();
   }
+});
+
+els.aiSettingsDialog.addEventListener("close", () => {
+  if (els.aiSettingsDialog.returnValue === "confirm") saveAiSettingsFromForm();
+  if (els.aiSettingsDialog.returnValue === "reset") resetAiSettingsToDefault();
 });
 
 render();

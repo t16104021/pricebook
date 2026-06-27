@@ -11,7 +11,8 @@
   --warning: #9a5a13;
   --danger: #b3261e;
   --shadow: 0 16px 40px rgba(28, 37, 34, 0.08);
-  font-family: Inter, "Noto Sans TC", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: Inter, "Noto Sans TC", system-ui, -apple-system,
+    BlinkMacSystemFont, sans-serif;
 }
 
 * {
@@ -586,6 +587,10 @@ dialog {
   box-shadow: var(--shadow);
 }
 
+.wide-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+
 dialog::backdrop {
   background: rgba(28, 37, 34, 0.36);
 }
@@ -641,13 +646,22 @@ label {
   font-weight: 700;
 }
 
-label input {
+label input,
+label textarea {
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 0 12px;
   color: var(--text);
   background: white;
+}
+
+label textarea {
+  width: 100%;
+  min-height: 260px;
+  padding: 12px;
+  resize: vertical;
+  line-height: 1.6;
 }
 
 .dialog-actions {
