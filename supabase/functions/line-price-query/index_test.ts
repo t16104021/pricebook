@@ -7,7 +7,7 @@ import {
   type WebhookDependencies,
 } from "./index.ts";
 import { createLineSignature } from "./line.ts";
-import type { PricebookPayload } from "./types.ts";
+import type { PersonalReplyContext, PricebookPayload } from "./types.ts";
 
 const payload: PricebookPayload = {
   products: [{
@@ -34,10 +34,11 @@ function event(overrides: Record<string, unknown> = {}) {
 }
 
 function setup(overrides: Partial<WebhookDependencies> = {}) {
-  const replies: string[] = [];
+  const replies: string[][] = [];
   const claimed: string[] = [];
   const completed: Array<[string, string]> = [];
   const released: Array<[string, string]> = [];
+  const personalReplyContexts: PersonalReplyContext[] = [];
   const dependencies: WebhookDependencies = {
     channelSecret: "secret",
     channelAccessToken: "access-token",
@@ -57,8 +58,12 @@ function setup(overrides: Partial<WebhookDependencies> = {}) {
       return Promise.resolve();
     },
     loadPayload: () => Promise.resolve(payload),
-    reply: (_replyToken, text) => {
-      replies.push(text);
+    createPersonalReply: (context) => {
+      personalReplyContexts.push(context);
+      return Promise.resolve(null);
+    },
+    reply: (_replyToken, messages) => {
+      replies.push(messages);
       return Promise.resolve();
     },
     ...overrides,
@@ -70,6 +75,7 @@ function setup(overrides: Partial<WebhookDependencies> = {}) {
     claimed,
     completed,
     released,
+    personalReplyContexts,
   };
 }
 
@@ -179,7 +185,7 @@ Deno.test("claims before rejecting an unauthorized user", async () => {
   })));
 
   assertEquals(claimed, ["evt-1"]);
-  assertEquals(replies, ["此帳號沒有查價權限"]);
+  assertEquals(replies, [["此帳號尚未開通查價權限，請聯絡管理者。"]]);
   assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
 });
 
@@ -191,8 +197,49 @@ Deno.test("accepts any configured allowed user id", async () => {
     events: [event({ source: { type: "user", userId: "second-user" } })],
   })));
 
-  assertEquals(replies[0].includes("產品定價：NT$1,200"), true);
+  assertEquals(replies[0][0].includes("產品定價：NT$1,200"), true);
   assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
+});
+
+Deno.test("sends fixed and personalized replies for a found price", async () => {
+  const { handler, replies, personalReplyContexts } = setup({
+    createPersonalReply: (context) => {
+      personalReplyContexts.push(context);
+      return Promise.resolve(
+        "長青商行您好，ABC-100 高效濾芯目前貴司售價是 NT$980，這邊先提供給您參考。",
+      );
+    },
+  });
+
+  await handler(post(JSON.stringify({ events: [event()] })));
+
+  assertEquals(replies.length, 1);
+  assertEquals(replies[0].length, 2);
+  assertEquals(replies[0][0].includes("產品定價：NT$1,200"), true);
+  assertEquals(replies[0][0].includes("售價日期：2026/06/27"), true);
+  assertEquals(
+    replies[0][1],
+    "長青商行您好，ABC-100 高效濾芯目前貴司售價是 NT$980，這邊先提供給您參考。",
+  );
+  assertEquals(personalReplyContexts, [{
+    customer: "長青商行",
+    productSku: "ABC-100",
+    productName: "高效濾芯",
+    customerPrice: { price: 980, date: "2026-06-27" },
+    note: "無",
+  }]);
+});
+
+Deno.test("falls back to the fixed reply when personalized reply is unavailable", async () => {
+  const { handler, replies } = setup({
+    createPersonalReply: () => Promise.reject(new Error("LLM timeout")),
+  });
+
+  await handler(post(JSON.stringify({ events: [event()] })));
+
+  assertEquals(replies.length, 1);
+  assertEquals(replies[0].length, 1);
+  assertEquals(replies[0][0].includes("產品定價：NT$1,200"), true);
 });
 
 Deno.test("replies with usage for a malformed command", async () => {
@@ -202,7 +249,7 @@ Deno.test("replies with usage for a malformed command", async () => {
   })));
 
   assertEquals(replies, [
-    "格式：查價 客戶名稱 產品編號\n範例：查價 長青商行 ABC-100",
+    ["格式：查價 客戶名稱 產品編號\n範例：查價 長青商行 ABC-100"],
   ]);
   assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
 });
@@ -212,8 +259,8 @@ Deno.test("loads the configured payload and replies with a price", async () => {
   const response = await handler(post(JSON.stringify({ events: [event()] })));
 
   assertEquals(response.status, 200);
-  assertEquals(replies[0].includes("產品定價：NT$1,200"), true);
-  assertEquals(replies[0].includes("客戶售價：NT$980"), true);
+  assertEquals(replies[0][0].includes("產品定價：NT$1,200"), true);
+  assertEquals(replies[0][0].includes("客戶售價：NT$980"), true);
   assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
   assertEquals(released, []);
 });
@@ -225,7 +272,7 @@ Deno.test("completes after a safe reply when payload loading fails", async () =>
   const response = await handler(post(JSON.stringify({ events: [event()] })));
 
   assertEquals(response.status, 200);
-  assertEquals(replies, ["查價服務暫時無法使用，請稍後再試"]);
+  assertEquals(replies, [["查價服務暫時無法使用，請稍後再試"]]);
   assertEquals(completed, [["evt-1", "claim-token-evt-1"]]);
   assertEquals(released, []);
 });
@@ -234,9 +281,9 @@ Deno.test("completes when the safe fallback reply succeeds", async () => {
   let replyCalls = 0;
   const sentTexts: string[] = [];
   const { handler, completed, released } = setup({
-    reply: (_replyToken, text) => {
+    reply: (_replyToken, messages) => {
       replyCalls++;
-      sentTexts.push(text);
+      sentTexts.push(messages[0]);
       if (replyCalls === 1) {
         return Promise.reject(new Error("temporary LINE failure"));
       }
@@ -556,6 +603,91 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
   ];
   assertEquals(headers.authorization, "Bearer channel-token");
   assertEquals(replyBody.includes("產品定價：NT$1,200"), true);
+});
+
+Deno.test("runtime configuration uses Gemini for personalized replies when configured", async () => {
+  const env: Record<string, string> = {
+    LINE_CHANNEL_SECRET: "channel-secret",
+    LINE_CHANNEL_ACCESS_TOKEN: "channel-token",
+    LINE_ALLOWED_USER_ID: "allowed-user",
+    PRICEBOOK_OWNER_ID: "owner-id",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+    GEMINI_API_KEY: "gemini-key",
+    GEMINI_MODEL: "gemini-test",
+  };
+  const client = {
+    rpc(name: string) {
+      return Promise.resolve({
+        data: name === "claim_line_webhook_event" ? "runtime-token" : null,
+        error: null,
+      });
+    },
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                single() {
+                  return Promise.resolve({ data: { payload }, error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const handler = createRuntimeHandler(
+    (name) => env[name],
+    () => client as unknown as Parameters<typeof createDatabaseAdapter>[0],
+  );
+  const rawBody = JSON.stringify({ events: [event()] });
+  const signature = await createLineSignature(
+    rawBody,
+    env.LINE_CHANNEL_SECRET,
+  );
+  const fetchCalls: Array<[string, string]> = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ((input, init) => {
+    fetchCalls.push([
+      String(input),
+      typeof init?.body === "string" ? init.body : "",
+    ]);
+
+    if (String(input).includes("generativelanguage.googleapis.com")) {
+      return Promise.resolve(Response.json({
+        candidates: [{
+          content: {
+            parts: [{
+              text:
+                "長青商行您好，ABC-100 高效濾芯目前貴司售價是 NT$980，這邊先提供給您參考。",
+            }],
+          },
+        }],
+      }));
+    }
+
+    return Promise.resolve(new Response("", { status: 200 }));
+  }) as typeof fetch;
+
+  try {
+    const response = await handler(post(rawBody, signature));
+    assertEquals(response.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assertEquals(
+    fetchCalls[0][0],
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent?key=gemini-key",
+  );
+  assertEquals(fetchCalls[0][1].includes("NT$980"), true);
+  assertEquals(fetchCalls[0][1].includes("1200"), false);
+  assertEquals(fetchCalls[0][1].includes("2026-06-27"), false);
+  assertEquals(fetchCalls[1][0], "https://api.line.me/v2/bot/message/reply");
+  assertEquals(fetchCalls[1][1].includes("長青商行您好"), true);
 });
 
 Deno.test("runtime configuration wires multiple allowed user ids", async () => {

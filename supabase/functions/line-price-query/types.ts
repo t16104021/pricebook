@@ -22,6 +22,25 @@ export interface PricebookPayload {
   products: Product[];
 }
 
+export interface PersonalReplyContext {
+  customer: string;
+  productSku: string;
+  productName: string;
+  customerPrice: PriceEntry | null;
+  note: string;
+}
+
+export type PricebookQueryResult =
+  | {
+    status: "found";
+    standardReply: string;
+    personalReplyContext: PersonalReplyContext;
+  }
+  | {
+    status: "message";
+    standardReply: string;
+  };
+
 export type ParsedCommand =
   | {
     ok: true;

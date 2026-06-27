@@ -1,8 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { parseCommand } from "./command.ts";
 import { replyToLine, verifyLineSignature } from "./line.ts";
-import { queryPricebook } from "./pricebook.ts";
-import type { PricebookPayload } from "./types.ts";
+import {
+  createGeminiPersonalReply,
+  createOpenAIPersonalReply,
+} from "./personal_reply.ts";
+import { queryPricebookResult } from "./pricebook.ts";
+import type { PersonalReplyContext, PricebookPayload } from "./types.ts";
 
 interface LineTextEvent {
   webhookEventId?: string;
@@ -21,9 +25,10 @@ export interface WebhookDependencies {
   completeEvent(eventId: string, claimToken: string): Promise<void>;
   releaseEvent(eventId: string, claimToken: string): Promise<void>;
   loadPayload(): Promise<PricebookPayload>;
+  createPersonalReply(context: PersonalReplyContext): Promise<string | null>;
   reply(
     replyToken: string,
-    text: string,
+    messages: string[],
     accessToken: string,
   ): Promise<void>;
 }
@@ -69,6 +74,15 @@ function parseAllowedUserIds(
     .filter((value) => value.length > 0);
 
   return [...new Set(userIds)];
+}
+
+function maskUserId(userId: string): string {
+  if (userId.length <= 8) return userId;
+  return `${userId.slice(0, 3)}…${userId.slice(-4)}`;
+}
+
+function unauthorizedReply(): string {
+  return "此帳號尚未開通查價權限，請聯絡管理者。";
 }
 
 export function createDatabaseAdapter(
@@ -154,38 +168,57 @@ export function createWebhookHandler(
     const claimToken = await dependencies.claimEvent(event.webhookEventId);
     if (claimToken === null) return;
 
-    let replyText: string;
+    let replyMessages: string[];
     try {
-      if (!dependencies.allowedUserIds.includes(event.source?.userId ?? "")) {
-        replyText = "此帳號沒有查價權限";
+      const userId = event.source?.userId ?? "";
+      const isAllowed = dependencies.allowedUserIds.includes(userId);
+      console.info("LINE webhook user check", {
+        webhookEventId: event.webhookEventId,
+        userId: maskUserId(userId),
+        allowedCount: dependencies.allowedUserIds.length,
+        isAllowed,
+      });
+      if (!isAllowed) {
+        replyMessages = [unauthorizedReply()];
       } else {
         const command = parseCommand(event.message.text ?? "");
         if (!command.ok) {
-          replyText = command.message;
+          replyMessages = [command.message];
         } else {
           const payload = await dependencies.loadPayload();
-          replyText = queryPricebook(
+          const result = queryPricebookResult(
             payload,
             command.customer,
             command.productQuery,
           );
+          replyMessages = [result.standardReply];
+          if (result.status === "found") {
+            try {
+              const personalReply = await dependencies.createPersonalReply(
+                result.personalReplyContext,
+              );
+              if (personalReply) replyMessages.push(personalReply);
+            } catch {
+              // Keep the fixed reply if AI wording is unavailable.
+            }
+          }
         }
       }
     } catch {
-      replyText = safeFailureMessage;
+      replyMessages = [safeFailureMessage];
     }
 
     try {
       await dependencies.reply(
         event.replyToken,
-        replyText,
+        replyMessages,
         dependencies.channelAccessToken,
       );
     } catch (error) {
       try {
         await dependencies.reply(
           event.replyToken,
-          safeFailureMessage,
+          [safeFailureMessage],
           dependencies.channelAccessToken,
         );
       } catch {
@@ -260,6 +293,10 @@ export function createRuntimeHandler(
   const pricebookOwnerId = requiredEnv("PRICEBOOK_OWNER_ID", readEnv);
   const supabaseUrl = requiredEnv("SUPABASE_URL", readEnv);
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY", readEnv);
+  const geminiKey = readEnv("GEMINI_API_KEY");
+  const geminiModel = readEnv("GEMINI_MODEL") || "gemini-2.5-flash";
+  const openAIKey = readEnv("OPENAI_API_KEY");
+  const openAIModel = readEnv("OPENAI_MODEL") || "gpt-5-mini";
   const supabase = clientFactory(supabaseUrl, serviceRoleKey);
   const database = createDatabaseAdapter(
     supabase as unknown as DatabaseClient,
@@ -272,6 +309,15 @@ export function createRuntimeHandler(
     allowedUserIds,
     verifySignature: verifyLineSignature,
     ...database,
+    createPersonalReply: async (context) => {
+      const geminiReply = await createGeminiPersonalReply(
+        context,
+        geminiKey,
+        geminiModel,
+      );
+      if (geminiReply) return geminiReply;
+      return createOpenAIPersonalReply(context, openAIKey, openAIModel);
+    },
     reply: replyToLine,
   });
 }

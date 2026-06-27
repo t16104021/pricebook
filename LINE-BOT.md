@@ -9,10 +9,10 @@
 
 ## 取得管理者 LINE User ID
 
-在 LINE Developers Console 開啟此 Messaging API channel，從 Basic settings
-找到 `Your user ID`，將它設定為 `LINE_ALLOWED_USER_ID`。如果要允許多個帳號，
-可以再設定 `LINE_ALLOWED_USER_IDS`，內容用逗號分隔多個 `U...` 值。同一個 provider
-下，這個值與本人傳送訊息時 webhook 的 `source.userId` 相同。
+在 LINE Developers Console 開啟此 Messaging API channel，從 Basic settings 找到
+`Your user ID`，將它設定為 `LINE_ALLOWED_USER_ID`。如果要允許多個帳號，
+可以再設定 `LINE_ALLOWED_USER_IDS`，內容用逗號分隔多個 `U...` 值。同一個
+provider 下，這個值與本人傳送訊息時 webhook 的 `source.userId` 相同。
 
 ## 設定 Secrets
 
@@ -31,14 +31,17 @@ supabase db push --dry-run
 supabase db push
 ```
 
-migration 必須先成功套用，LINE 查價功能才可正常使用。接著設定 Edge Function secrets：
+migration 必須先成功套用，LINE 查價功能才可正常使用。接著設定 Edge Function
+secrets：
 
 建議到 Supabase Dashboard 的 Edge Function Secrets 管理頁，逐項輸入
 `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`LINE_ALLOWED_USER_ID`
-、`LINE_ALLOWED_USER_IDS` 與 `PRICEBOOK_OWNER_ID`，避免真值留在 shell history。
+、`LINE_ALLOWED_USER_IDS`、`PRICEBOOK_OWNER_ID`，以及選填的
+`GEMINI_API_KEY`、`GEMINI_MODEL`、`OPENAI_API_KEY`、`OPENAI_MODEL`，避免真值留在
+shell history。
 
-以下 CLI 命令只以 placeholders 示意，不可將真值直接輸入共享終端或會保留
-history 的終端：
+以下 CLI 命令只以 placeholders 示意，不可將真值直接輸入共享終端或會保留 history
+的終端：
 
 ```bash
 supabase secrets set \
@@ -47,8 +50,18 @@ supabase secrets set \
   LINE_ALLOWED_USER_ID='U...' \
   LINE_ALLOWED_USER_IDS='U...,U...' \
   PRICEBOOK_OWNER_ID='Supabase Auth UUID' \
+  GEMINI_API_KEY='...' \
+  GEMINI_MODEL='gemini-2.5-flash' \
+  OPENAI_API_KEY='sk-...' \
+  OPENAI_MODEL='gpt-5-mini' \
   --project-ref fuhzrbbyqoojjguiuijf
 ```
+
+`GEMINI_API_KEY` 與 `OPENAI_API_KEY` 都未設定時，LINE
+查價仍會回覆固定格式，不會呼叫 任何 AI API。設定 `GEMINI_API_KEY`
+後，查價成功會額外回覆一則 AI 人性化話術；若沒有 Gemini key，才會嘗試使用
+`OPENAI_API_KEY`。AI 回覆只會使用客戶名稱、產品編號、產品名稱、
+客戶售價與備註，不會顯示產品定價、定價日期或價格最後更新日。
 
 也可以使用本機 env file。執行前必須確認 `.env.line-bot` 已被 `.gitignore`
 忽略；檔案只存放於受信任的本機環境，使用完畢後必須安全刪除：
@@ -59,10 +72,10 @@ supabase secrets set \
   --project-ref fuhzrbbyqoojjguiuijf
 ```
 
-`SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY` 由 Supabase Edge Functions 預設提供。
-所有 LINE secret、token、User ID、owner UUID 與 Supabase secret 都不得提交至
-GitHub、寫回本文件或放入前端 JavaScript；尤其 `SUPABASE_SERVICE_ROLE_KEY`
-絕不可暴露在前端。
+`SUPABASE_URL` 與 `SUPABASE_SERVICE_ROLE_KEY` 由 Supabase Edge Functions
+預設提供。 所有 LINE secret、token、User ID、owner UUID 與 Supabase secret
+都不得提交至 GitHub、寫回本文件或放入前端 JavaScript；尤其
+`SUPABASE_SERVICE_ROLE_KEY` 絕不可暴露在前端。
 
 ## 部署
 
@@ -80,8 +93,8 @@ Webhook URL：
 https://fuhzrbbyqoojjguiuijf.supabase.co/functions/v1/line-price-query
 ```
 
-將網址填入 LINE Developers Console，按 Verify。Verify 顯示成功後，同時開啟
-Use webhook 與 Webhook redelivery；並關閉 LINE 官方帳號的預設自動回覆，
+將網址填入 LINE Developers Console，按 Verify。Verify 顯示成功後，同時開啟 Use
+webhook 與 Webhook redelivery；並關閉 LINE 官方帳號的預設自動回覆，
 避免每次查價收到雙重回覆。
 
 Webhook event 的 processing claim 租約為 5 分鐘；處理中斷後，LINE 重送可在

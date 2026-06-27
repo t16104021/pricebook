@@ -74,7 +74,7 @@ export async function verifyLineSignature(
 
 export async function replyToLine(
   replyToken: string,
-  text: string,
+  messages: string[],
   accessToken: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
@@ -88,7 +88,10 @@ export async function replyToLine(
       },
       body: JSON.stringify({
         replyToken,
-        messages: [{ type: "text", text: truncateLineText(text) }],
+        messages: messages.map((text) => ({
+          type: "text",
+          text: truncateLineText(text),
+        })),
       }),
     },
   );

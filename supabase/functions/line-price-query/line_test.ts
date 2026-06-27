@@ -45,7 +45,7 @@ Deno.test("sends a LINE reply request with bearer auth and JSON", async () => {
     return Promise.resolve(new Response(null, { status: 200 }));
   }) as typeof fetch;
 
-  await replyToLine("reply-token", "查價結果", "access-token", mockFetch);
+  await replyToLine("reply-token", ["查價結果"], "access-token", mockFetch);
 
   assertEquals(
     capturedUrl,
@@ -64,6 +64,26 @@ Deno.test("sends a LINE reply request with bearer auth and JSON", async () => {
   );
 });
 
+Deno.test("sends multiple LINE text messages in one reply request", async () => {
+  let sentBody = "";
+  const mockFetch = ((_url: string | URL | Request, init?: RequestInit) => {
+    sentBody = String(init?.body);
+    return Promise.resolve(new Response(null, { status: 200 }));
+  }) as typeof fetch;
+
+  await replyToLine(
+    "reply-token",
+    ["固定格式", "AI 人性化回覆"],
+    "access-token",
+    mockFetch,
+  );
+
+  assertEquals(JSON.parse(sentBody).messages, [
+    { type: "text", text: "固定格式" },
+    { type: "text", text: "AI 人性化回覆" },
+  ]);
+});
+
 Deno.test("truncates LINE reply text to 5000 characters", async () => {
   let sentBody = "";
   const mockFetch = ((_url: string | URL | Request, init?: RequestInit) => {
@@ -71,7 +91,12 @@ Deno.test("truncates LINE reply text to 5000 characters", async () => {
     return Promise.resolve(new Response(null, { status: 200 }));
   }) as typeof fetch;
 
-  await replyToLine("reply-token", "x".repeat(5001), "access-token", mockFetch);
+  await replyToLine(
+    "reply-token",
+    ["x".repeat(5001)],
+    "access-token",
+    mockFetch,
+  );
 
   assertEquals(JSON.parse(sentBody).messages[0].text, "x".repeat(5000));
 });
@@ -85,7 +110,7 @@ Deno.test("does not split an emoji at the 5000 code-unit boundary", async () => 
 
   await replyToLine(
     "reply-token",
-    `${"x".repeat(4999)}😀tail`,
+    [`${"x".repeat(4999)}😀tail`],
     "access-token",
     mockFetch,
   );
@@ -105,7 +130,7 @@ Deno.test("reports LINE API errors without exposing the access token", async () 
 
   let thrown: unknown;
   try {
-    await replyToLine("reply-token", "text", accessToken, mockFetch);
+    await replyToLine("reply-token", ["text"], accessToken, mockFetch);
   } catch (error) {
     thrown = error;
   }
