@@ -8,6 +8,18 @@ function base64ToBytes(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
 }
 
+function truncateLineText(text: string): string {
+  const truncated = text.slice(0, 5000);
+  const lastCodeUnit = truncated.charCodeAt(truncated.length - 1);
+  const nextCodeUnit = text.charCodeAt(5000);
+  const splitsSurrogatePair = lastCodeUnit >= 0xD800 &&
+    lastCodeUnit <= 0xDBFF &&
+    nextCodeUnit >= 0xDC00 &&
+    nextCodeUnit <= 0xDFFF;
+
+  return splitsSurrogatePair ? truncated.slice(0, -1) : truncated;
+}
+
 async function importHmacKey(
   secret: string,
   usages: KeyUsage[],
@@ -71,7 +83,7 @@ export async function replyToLine(
       },
       body: JSON.stringify({
         replyToken,
-        messages: [{ type: "text", text: text.slice(0, 5000) }],
+        messages: [{ type: "text", text: truncateLineText(text) }],
       }),
     },
   );

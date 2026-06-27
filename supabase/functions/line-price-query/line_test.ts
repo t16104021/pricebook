@@ -12,11 +12,13 @@ import {
 } from "./line.ts";
 
 Deno.test("accepts a valid LINE HMAC signature", async () => {
-  const body = '{"events":[]}';
-  const secret = "test-channel-secret";
-  const signature = await createLineSignature(body, secret);
-
-  assert(await verifyLineSignature(body, signature, secret));
+  assert(
+    await verifyLineSignature(
+      '{"events":[]}',
+      "sKRrt+MTE71nWWZPaYrvYSdH9JGlgckmBidZxDuPgPc=",
+      "test-channel-secret",
+    ),
+  );
 });
 
 Deno.test("rejects a changed body", async () => {
@@ -72,6 +74,23 @@ Deno.test("truncates LINE reply text to 5000 characters", async () => {
   await replyToLine("reply-token", "x".repeat(5001), "access-token", mockFetch);
 
   assertEquals(JSON.parse(sentBody).messages[0].text, "x".repeat(5000));
+});
+
+Deno.test("does not split an emoji at the 5000 code-unit boundary", async () => {
+  let sentBody = "";
+  const mockFetch = ((_url: string | URL | Request, init?: RequestInit) => {
+    sentBody = String(init?.body);
+    return Promise.resolve(new Response(null, { status: 200 }));
+  }) as typeof fetch;
+
+  await replyToLine(
+    "reply-token",
+    `${"x".repeat(4999)}😀tail`,
+    "access-token",
+    mockFetch,
+  );
+
+  assertEquals(JSON.parse(sentBody).messages[0].text, "x".repeat(4999));
 });
 
 Deno.test("reports LINE API errors without exposing the access token", async () => {
