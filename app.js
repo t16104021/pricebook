@@ -451,9 +451,10 @@ function customerInitialKey(name) {
 
 function getAllDates() {
   return data.products.flatMap((product) => [
+    product.updatedAt,
     ...product.basePrices.map((price) => price.date),
     ...product.sales.flatMap((sale) => sale.prices.map((price) => price.date)),
-  ]);
+  ]).filter(Boolean);
 }
 
 function getSelectedProduct() {
@@ -478,14 +479,8 @@ function productMatches(product, parsed) {
       .toLowerCase();
 
   if (parsed.command === "changed") {
-    const dates = [
-      ...product.basePrices.map((price) => price.date),
-      ...product.sales.flatMap((sale) =>
-        sale.prices.map((price) => price.date)
-      ),
-    ].sort((a, b) => b.localeCompare(a));
-    const newest = dates[0] ?? "";
-    return newest >= offsetDate(-30) && haystack.includes(parsed.term);
+    return (product.updatedAt || "") >= offsetDate(-30) &&
+      haystack.includes(parsed.term);
   }
 
   if (parsed.command === "product") {
@@ -513,6 +508,10 @@ function offsetDate(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function markProductChanged(product) {
+  if (product) product.updatedAt = today();
 }
 
 function getFilteredProducts() {
@@ -941,6 +940,7 @@ function addProductFromForm() {
     sku: form.sku.value.trim(),
     name: form.name.value.trim(),
     category: form.category.value.trim(),
+    updatedAt: today(),
     basePrices: [{
       price: Number(form.price.value),
       date: form.date.value,
@@ -963,6 +963,7 @@ function updateProductFromForm() {
   product.sku = form.sku.value.trim();
   product.name = form.name.value.trim();
   product.category = form.category.value.trim();
+  markProductChanged(product);
   saveData();
   render();
 }
@@ -1012,6 +1013,7 @@ function deleteTimelineTarget() {
     }
   }
 
+  markProductChanged(product);
   timelineDeleteTarget = null;
   saveData();
   render();
@@ -1026,6 +1028,7 @@ function updateBaseFromForm() {
     date: form.date.value,
     note: form.note.value.trim() || "定價更新",
   });
+  markProductChanged(product);
   saveData();
   render();
 }
@@ -1048,6 +1051,7 @@ function updateSaleFromForm() {
     note: form.note.value.trim() || "客戶售價更新",
   });
 
+  markProductChanged(product);
   saveData();
   render();
 }
@@ -1064,6 +1068,7 @@ function productRows() {
     SKU: product.sku,
     產品名稱: product.name,
     分類: product.category,
+    最近異動: product.updatedAt || "",
   }));
 }
 
@@ -1111,6 +1116,7 @@ function exportData() {
     "SKU",
     "產品名稱",
     "分類",
+    "最近異動",
   ]);
   appendSheet(workbook, "產品定價", basePriceRows(), [
     "product_id",
@@ -1267,6 +1273,8 @@ function workbookToData(workbook) {
       sku,
       name,
       category: String(rowValue(row, ["分類", "category"])).trim() || "未分類",
+      updatedAt: normalizeDate(rowValue(row, ["最近異動", "updatedAt"])) ||
+        today(),
       basePrices: [],
       sales: [],
     };
