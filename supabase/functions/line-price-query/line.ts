@@ -4,8 +4,13 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-function base64ToBytes(value: string): Uint8Array {
-  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
+  const decoded = atob(value);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index++) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function truncateLineText(text: string): string {

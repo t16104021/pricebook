@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert@1.0.19";
 import {
   createDatabaseAdapter,
   createRuntimeHandler,
@@ -42,21 +42,24 @@ function setup(overrides: Partial<WebhookDependencies> = {}) {
     channelSecret: "secret",
     channelAccessToken: "access-token",
     allowedUserId: "allowed-user",
-    verifySignature: async (_body, signature, secret) =>
-      signature === "valid" && secret === "secret",
-    claimEvent: async (eventId) => {
+    verifySignature: (_body, signature, secret) =>
+      Promise.resolve(signature === "valid" && secret === "secret"),
+    claimEvent: (eventId) => {
       claimed.push(eventId);
-      return `claim-token-${eventId}`;
+      return Promise.resolve(`claim-token-${eventId}`);
     },
-    completeEvent: async (eventId, claimToken) => {
+    completeEvent: (eventId, claimToken) => {
       completed.push([eventId, claimToken]);
+      return Promise.resolve();
     },
-    releaseEvent: async (eventId, claimToken) => {
+    releaseEvent: (eventId, claimToken) => {
       released.push([eventId, claimToken]);
+      return Promise.resolve();
     },
-    loadPayload: async () => payload,
-    reply: async (_replyToken, text) => {
+    loadPayload: () => Promise.resolve(payload),
+    reply: (_replyToken, text) => {
       replies.push(text);
+      return Promise.resolve();
     },
     ...overrides,
   };
@@ -116,13 +119,13 @@ Deno.test("ignores unsupported and duplicate events", async () => {
   const claimCalls: string[] = [];
   let loadCalls = 0;
   const { handler, replies, released } = setup({
-    claimEvent: async (eventId) => {
+    claimEvent: (eventId) => {
       claimCalls.push(eventId);
-      return null;
+      return Promise.resolve(null);
     },
-    loadPayload: async () => {
+    loadPayload: () => {
       loadCalls++;
-      return payload;
+      return Promise.resolve(payload);
     },
   });
   const response = await handler(post(JSON.stringify({
@@ -143,9 +146,9 @@ Deno.test("ignores unsupported and duplicate events", async () => {
 Deno.test("ignores group and room events even when the user ID is allowed", async () => {
   let loadCalls = 0;
   const { handler, replies, claimed, completed, released } = setup({
-    loadPayload: async () => {
+    loadPayload: () => {
       loadCalls++;
-      return payload;
+      return Promise.resolve(payload);
     },
   });
   const response = await handler(post(JSON.stringify({
@@ -205,9 +208,7 @@ Deno.test("loads the configured payload and replies with a price", async () => {
 
 Deno.test("completes after a safe reply when payload loading fails", async () => {
   const { handler, replies, completed, released } = setup({
-    loadPayload: async () => {
-      throw new Error("temporary database failure");
-    },
+    loadPayload: () => Promise.reject(new Error("temporary database failure")),
   });
   const response = await handler(post(JSON.stringify({ events: [event()] })));
 
@@ -221,12 +222,13 @@ Deno.test("completes when the safe fallback reply succeeds", async () => {
   let replyCalls = 0;
   const sentTexts: string[] = [];
   const { handler, completed, released } = setup({
-    reply: async (_replyToken, text) => {
+    reply: (_replyToken, text) => {
       replyCalls++;
       sentTexts.push(text);
       if (replyCalls === 1) {
-        throw new Error("temporary LINE failure");
+        return Promise.reject(new Error("temporary LINE failure"));
       }
+      return Promise.resolve();
     },
   });
   const response = await handler(post(JSON.stringify({ events: [event()] })));
@@ -240,9 +242,9 @@ Deno.test("completes when the safe fallback reply succeeds", async () => {
 Deno.test("releases and returns 503 when both reply attempts fail", async () => {
   let replyCalls = 0;
   const { handler, completed, released } = setup({
-    reply: async () => {
+    reply: () => {
       replyCalls++;
-      throw new Error("temporary LINE failure");
+      return Promise.reject(new Error("temporary LINE failure"));
     },
   });
   const response = await handler(post(JSON.stringify({ events: [event()] })));
@@ -258,9 +260,12 @@ Deno.test("a release failure does not replace the original error", async () => {
   let thrown: unknown;
 
   try {
-    await releaseFailedClaim("evt-1", "claim-token", original, async () => {
-      throw new Error("release failure");
-    });
+    await releaseFailedClaim(
+      "evt-1",
+      "claim-token",
+      original,
+      () => Promise.reject(new Error("release failure")),
+    );
   } catch (error) {
     thrown = error;
   }
@@ -274,11 +279,10 @@ Deno.test("returns 503 when any event handler rejects", async () => {
   console.error = (...values) => errors.push(values);
   try {
     const { handler } = setup({
-      claimEvent: async () => {
-        throw new Error(
-          "secret message reply-token customer-price NT$980",
-        );
-      },
+      claimEvent: () =>
+        Promise.reject(
+          new Error("secret message reply-token customer-price NT$980"),
+        ),
     });
     const response = await handler(post(JSON.stringify({
       events: [event(), event({ webhookEventId: "evt-2" })],
@@ -375,6 +379,9 @@ Deno.test("an old claim token cannot complete or release a newer lease", async (
         }
       }
       return Promise.resolve({ data: null, error: null });
+    },
+    from() {
+      throw new Error("pricebook payload should not be loaded");
     },
   };
   const adapter = createDatabaseAdapter(
@@ -498,12 +505,12 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
     env.LINE_CHANNEL_SECRET,
   );
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (_input, init) => {
+  globalThis.fetch = ((_input, init) => {
     replyCalls.push([
       init?.headers,
       typeof init?.body === "string" ? init.body : "",
     ]);
-    return new Response("", { status: 200 });
+    return Promise.resolve(new Response("", { status: 200 }));
   }) as typeof fetch;
 
   try {
@@ -539,10 +546,12 @@ Deno.test("runtime configuration wires secrets, owner, and service client", asyn
 });
 
 Deno.test("initial webhook migration remains unchanged", async () => {
-  const sql = await Deno.readTextFile(new URL(
-    "../../migrations/202606270001_create_line_webhook_events.sql",
-    import.meta.url,
-  ));
+  const sql = await Deno.readTextFile(
+    new URL(
+      "../../migrations/202606270001_create_line_webhook_events.sql",
+      import.meta.url,
+    ),
+  );
   const expected = `create table if not exists public.line_webhook_events (
   event_id text primary key,
   processed_at timestamptz not null default now()
@@ -561,10 +570,12 @@ create index if not exists line_webhook_events_processed_at_idx
 });
 
 Deno.test("upgrade migration defines fenced and locked-down webhook RPCs", async () => {
-  const sql = await Deno.readTextFile(new URL(
-    "../../migrations/202606270002_upgrade_line_webhook_events.sql",
-    import.meta.url,
-  ));
+  const sql = await Deno.readTextFile(
+    new URL(
+      "../../migrations/202606270002_upgrade_line_webhook_events.sql",
+      import.meta.url,
+    ),
+  );
   const requiredPatterns = [
     /add column if not exists status text/i,
     /add column if not exists claimed_at timestamptz/i,
@@ -598,10 +609,12 @@ Deno.test("upgrade migration defines fenced and locked-down webhook RPCs", async
 });
 
 Deno.test("LINE setup documents redelivery and dedup retention", async () => {
-  const guide = await Deno.readTextFile(new URL(
-    "../../../LINE-BOT.md",
-    import.meta.url,
-  ));
+  const guide = await Deno.readTextFile(
+    new URL(
+      "../../../LINE-BOT.md",
+      import.meta.url,
+    ),
+  );
 
   assertEquals(guide.includes("Webhook redelivery"), true);
   assertEquals(guide.includes("5 分鐘"), true);

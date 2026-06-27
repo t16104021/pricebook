@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert@1.0.19";
 
 import { queryPricebook } from "./pricebook.ts";
 import type { PricebookPayload, Product } from "./types.ts";
@@ -175,9 +175,7 @@ Deno.test("limits partial matches to ten and reports the remaining count", () =>
     sku: `ITEM-${String(index + 1).padStart(2, "0")}`,
     name: `產品 ${index + 1}`,
     basePrices: [],
-    sales: index === 0
-      ? [{ customer: "長青商行", prices: [] }]
-      : [],
+    sales: index === 0 ? [{ customer: "長青商行", prices: [] }] : [],
   }));
 
   assertEquals(

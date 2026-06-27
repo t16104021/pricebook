@@ -3,7 +3,7 @@ import {
   assertEquals,
   assertFalse,
   assertStringIncludes,
-} from "jsr:@std/assert";
+} from "jsr:@std/assert@1.0.19";
 
 import {
   createLineSignature,

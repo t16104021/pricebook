@@ -65,9 +65,7 @@ export function queryPricebook(
 
   const product = matches[0];
   const basePrice = latest(product.basePrices);
-  const customerSale = product.sales.find((sale) =>
-    sale.customer === customer
-  );
+  const customerSale = product.sales.find((sale) => sale.customer === customer);
   const customerPrice = latest(customerSale?.prices ?? []);
 
   return [
