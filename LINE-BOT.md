@@ -78,8 +78,12 @@ Webhook URL：
 https://fuhzrbbyqoojjguiuijf.supabase.co/functions/v1/line-price-query
 ```
 
-將網址填入 LINE Developers Console，按 Verify。Verify 顯示成功後，開啟
-Use webhook；同時關閉 LINE 官方帳號的預設自動回覆，避免每次查價收到雙重回覆。
+將網址填入 LINE Developers Console，按 Verify。Verify 顯示成功後，同時開啟
+Use webhook 與 Webhook redelivery；並關閉 LINE 官方帳號的預設自動回覆，
+避免每次查價收到雙重回覆。
+
+Webhook event 的 processing claim 租約為 5 分鐘；處理中斷後，LINE 重送可在
+租約逾時後重新取得。completed event 保留 30 天，之後會在後續 claim 時自動清理。
 
 免費訊息額度與限制以 LINE 官方帳號目前方案顯示的內容為準。
 

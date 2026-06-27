@@ -8,7 +8,7 @@ interface LineTextEvent {
   webhookEventId?: string;
   type?: string;
   replyToken?: string;
-  source?: { userId?: string };
+  source?: { type?: string; userId?: string };
   message?: { type?: string; text?: string };
 }
 
@@ -18,6 +18,7 @@ export interface WebhookDependencies {
   allowedUserId: string;
   verifySignature: typeof verifyLineSignature;
   claimEvent(eventId: string): Promise<boolean>;
+  completeEvent(eventId: string): Promise<void>;
   releaseEvent(eventId: string): Promise<void>;
   loadPayload(): Promise<PricebookPayload>;
   reply(
@@ -34,15 +35,14 @@ interface DatabaseError {
 }
 
 interface DatabaseClient {
+  rpc(
+    name: string,
+    args: { p_event_id: string },
+  ): PromiseLike<{
+    data: unknown;
+    error: DatabaseError | null;
+  }>;
   from(table: string): {
-    insert(value: { event_id: string }): PromiseLike<{
-      error: DatabaseError | null;
-    }>;
-    delete(): {
-      eq(column: string, value: string): PromiseLike<{
-        error: DatabaseError | null;
-      }>;
-    };
     select(column: string): {
       eq(filterColumn: string, value: string): {
         single(): PromiseLike<{
@@ -65,19 +65,27 @@ export function createDatabaseAdapter(
   pricebookOwnerId: string,
 ) {
   const claimEvent = async (eventId: string): Promise<boolean> => {
-    const { error } = await client
-      .from("line_webhook_events")
-      .insert({ event_id: eventId });
-    if (!error) return true;
-    if (error.code === "23505") return false;
-    throw error;
+    const { data, error } = await client.rpc(
+      "claim_line_webhook_event",
+      { p_event_id: eventId },
+    );
+    if (error) throw error;
+    return data === true;
+  };
+
+  const completeEvent = async (eventId: string): Promise<void> => {
+    const { error } = await client.rpc(
+      "complete_line_webhook_event",
+      { p_event_id: eventId },
+    );
+    if (error) throw error;
   };
 
   const releaseEvent = async (eventId: string): Promise<void> => {
-    const { error } = await client
-      .from("line_webhook_events")
-      .delete()
-      .eq("event_id", eventId);
+    const { error } = await client.rpc(
+      "release_line_webhook_event",
+      { p_event_id: eventId },
+    );
     if (error) throw error;
   };
 
@@ -91,7 +99,7 @@ export function createDatabaseAdapter(
     return data.payload as PricebookPayload;
   };
 
-  return { claimEvent, releaseEvent, loadPayload };
+  return { claimEvent, completeEvent, releaseEvent, loadPayload };
 }
 
 export async function releaseFailedClaim(
@@ -110,10 +118,13 @@ export async function releaseFailedClaim(
 export function createWebhookHandler(
   dependencies: WebhookDependencies,
 ): (request: Request) => Promise<Response> {
+  const safeFailureMessage = "查價服務暫時無法使用，請稍後再試";
+
   const handleEvent = async (event: LineTextEvent): Promise<void> => {
     if (
       event.type !== "message" ||
       event.message?.type !== "text" ||
+      event.source?.type !== "user" ||
       !event.replyToken ||
       !event.webhookEventId
     ) {
@@ -122,44 +133,50 @@ export function createWebhookHandler(
 
     if (!(await dependencies.claimEvent(event.webhookEventId))) return;
 
+    let replyText: string;
     try {
       if (event.source?.userId !== dependencies.allowedUserId) {
-        await dependencies.reply(
-          event.replyToken,
-          "此帳號沒有查價權限",
-          dependencies.channelAccessToken,
-        );
-        return;
+        replyText = "此帳號沒有查價權限";
+      } else {
+        const command = parseCommand(event.message.text ?? "");
+        if (!command.ok) {
+          replyText = command.message;
+        } else {
+          const payload = await dependencies.loadPayload();
+          replyText = queryPricebook(
+            payload,
+            command.customer,
+            command.productQuery,
+          );
+        }
       }
+    } catch {
+      replyText = safeFailureMessage;
+    }
 
-      const command = parseCommand(event.message.text ?? "");
-      if (!command.ok) {
-        await dependencies.reply(
-          event.replyToken,
-          command.message,
-          dependencies.channelAccessToken,
-        );
-        return;
-      }
-
-      const payload = await dependencies.loadPayload();
-      const reply = queryPricebook(
-        payload,
-        command.customer,
-        command.productQuery,
-      );
+    try {
       await dependencies.reply(
         event.replyToken,
-        reply,
+        replyText,
         dependencies.channelAccessToken,
       );
     } catch (error) {
-      await releaseFailedClaim(
-        event.webhookEventId,
-        error,
-        dependencies.releaseEvent,
-      );
+      try {
+        await dependencies.reply(
+          event.replyToken,
+          safeFailureMessage,
+          dependencies.channelAccessToken,
+        );
+      } catch {
+        await releaseFailedClaim(
+          event.webhookEventId,
+          error,
+          dependencies.releaseEvent,
+        );
+      }
     }
+
+    await dependencies.completeEvent(event.webhookEventId);
   };
 
   return async (request: Request): Promise<Response> => {
@@ -194,13 +211,14 @@ export function createWebhookHandler(
       ? body.events as LineTextEvent[]
       : [];
     const results = await Promise.allSettled(events.map(handleEvent));
-    for (const result of results) {
-      if (result.status === "rejected") {
-        console.error("LINE webhook event failed");
-      }
+    const failed = results.filter((result) => result.status === "rejected");
+    for (const _result of failed) {
+      console.error("LINE webhook event failed");
     }
 
-    return new Response("OK", { status: 200 });
+    return failed.length > 0
+      ? new Response("Service Unavailable", { status: 503 })
+      : new Response("OK", { status: 200 });
   };
 }
 
