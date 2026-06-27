@@ -1,0 +1,4 @@
+project_id = "fuhzrbbyqoojjguiuijf"
+
+[functions.line-price-query]
+verify_jwt = false
