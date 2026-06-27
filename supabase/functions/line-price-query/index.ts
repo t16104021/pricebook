@@ -18,6 +18,7 @@ export interface WebhookDependencies {
   allowedUserId: string;
   verifySignature: typeof verifyLineSignature;
   claimEvent(eventId: string): Promise<boolean>;
+  releaseEvent(eventId: string): Promise<void>;
   loadPayload(): Promise<PricebookPayload>;
   reply(
     replyToken: string,
@@ -28,10 +29,82 @@ export interface WebhookDependencies {
 
 type EnvReader = (name: string) => string | undefined;
 
+interface DatabaseError {
+  code?: string;
+}
+
+interface DatabaseClient {
+  from(table: string): {
+    insert(value: { event_id: string }): PromiseLike<{
+      error: DatabaseError | null;
+    }>;
+    delete(): {
+      eq(column: string, value: string): PromiseLike<{
+        error: DatabaseError | null;
+      }>;
+    };
+    select(column: string): {
+      eq(filterColumn: string, value: string): {
+        single(): PromiseLike<{
+          data: { payload: unknown };
+          error: DatabaseError | null;
+        }>;
+      };
+    };
+  };
+}
+
 export function requiredEnv(name: string, readEnv: EnvReader): string {
   const value = readEnv(name);
   if (!value) throw new Error(`Missing environment variable: ${name}`);
   return value;
+}
+
+export function createDatabaseAdapter(
+  client: DatabaseClient,
+  pricebookOwnerId: string,
+) {
+  const claimEvent = async (eventId: string): Promise<boolean> => {
+    const { error } = await client
+      .from("line_webhook_events")
+      .insert({ event_id: eventId });
+    if (!error) return true;
+    if (error.code === "23505") return false;
+    throw error;
+  };
+
+  const releaseEvent = async (eventId: string): Promise<void> => {
+    const { error } = await client
+      .from("line_webhook_events")
+      .delete()
+      .eq("event_id", eventId);
+    if (error) throw error;
+  };
+
+  const loadPayload = async (): Promise<PricebookPayload> => {
+    const { data, error } = await client
+      .from("pricebook_data")
+      .select("payload")
+      .eq("id", pricebookOwnerId)
+      .single();
+    if (error) throw error;
+    return data.payload as PricebookPayload;
+  };
+
+  return { claimEvent, releaseEvent, loadPayload };
+}
+
+export async function releaseFailedClaim(
+  eventId: string,
+  originalError: unknown,
+  releaseEvent: (eventId: string) => Promise<void>,
+): Promise<never> {
+  try {
+    await releaseEvent(eventId);
+  } catch {
+    // Preserve the event failure without logging release details.
+  }
+  throw originalError;
 }
 
 export function createWebhookHandler(
@@ -49,36 +122,44 @@ export function createWebhookHandler(
 
     if (!(await dependencies.claimEvent(event.webhookEventId))) return;
 
-    if (event.source?.userId !== dependencies.allowedUserId) {
+    try {
+      if (event.source?.userId !== dependencies.allowedUserId) {
+        await dependencies.reply(
+          event.replyToken,
+          "此帳號沒有查價權限",
+          dependencies.channelAccessToken,
+        );
+        return;
+      }
+
+      const command = parseCommand(event.message.text ?? "");
+      if (!command.ok) {
+        await dependencies.reply(
+          event.replyToken,
+          command.message,
+          dependencies.channelAccessToken,
+        );
+        return;
+      }
+
+      const payload = await dependencies.loadPayload();
+      const reply = queryPricebook(
+        payload,
+        command.customer,
+        command.productQuery,
+      );
       await dependencies.reply(
         event.replyToken,
-        "此帳號沒有查價權限",
+        reply,
         dependencies.channelAccessToken,
       );
-      return;
-    }
-
-    const command = parseCommand(event.message.text ?? "");
-    if (!command.ok) {
-      await dependencies.reply(
-        event.replyToken,
-        command.message,
-        dependencies.channelAccessToken,
+    } catch (error) {
+      await releaseFailedClaim(
+        event.webhookEventId,
+        error,
+        dependencies.releaseEvent,
       );
-      return;
     }
-
-    const payload = await dependencies.loadPayload();
-    const reply = queryPricebook(
-      payload,
-      command.customer,
-      command.productQuery,
-    );
-    await dependencies.reply(
-      event.replyToken,
-      reply,
-      dependencies.channelAccessToken,
-    );
   };
 
   return async (request: Request): Promise<Response> => {
@@ -136,33 +217,17 @@ export function createRuntimeHandler(
   const supabaseUrl = requiredEnv("SUPABASE_URL", readEnv);
   const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY", readEnv);
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-  const claimEvent = async (eventId: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from("line_webhook_events")
-      .insert({ event_id: eventId });
-    if (!error) return true;
-    if (error.code === "23505") return false;
-    throw error;
-  };
-
-  const loadPayload = async (): Promise<PricebookPayload> => {
-    const { data, error } = await supabase
-      .from("pricebook_data")
-      .select("payload")
-      .eq("id", pricebookOwnerId)
-      .single();
-    if (error) throw error;
-    return data.payload as PricebookPayload;
-  };
+  const database = createDatabaseAdapter(
+    supabase as unknown as DatabaseClient,
+    pricebookOwnerId,
+  );
 
   return createWebhookHandler({
     channelSecret,
     channelAccessToken,
     allowedUserId,
     verifySignature: verifyLineSignature,
-    claimEvent,
-    loadPayload,
+    ...database,
     reply: replyToLine,
   });
 }

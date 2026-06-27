@@ -1,6 +1,8 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
+  createDatabaseAdapter,
   createWebhookHandler,
+  releaseFailedClaim,
   type WebhookDependencies,
 } from "./index.ts";
 import type { PricebookPayload } from "./types.ts";
@@ -32,6 +34,7 @@ function event(overrides: Record<string, unknown> = {}) {
 function setup(overrides: Partial<WebhookDependencies> = {}) {
   const replies: string[] = [];
   const claimed: string[] = [];
+  const released: string[] = [];
   const dependencies: WebhookDependencies = {
     channelSecret: "secret",
     channelAccessToken: "access-token",
@@ -41,6 +44,9 @@ function setup(overrides: Partial<WebhookDependencies> = {}) {
     claimEvent: async (eventId) => {
       claimed.push(eventId);
       return true;
+    },
+    releaseEvent: async (eventId) => {
+      released.push(eventId);
     },
     loadPayload: async () => payload,
     reply: async (_replyToken, text) => {
@@ -53,6 +59,7 @@ function setup(overrides: Partial<WebhookDependencies> = {}) {
     handler: createWebhookHandler(dependencies),
     replies,
     claimed,
+    released,
   };
 }
 
@@ -99,8 +106,17 @@ Deno.test("treats non-object payloads and non-array events as empty", async () =
 });
 
 Deno.test("ignores unsupported and duplicate events", async () => {
-  const { handler, replies, claimed } = setup({
-    claimEvent: async () => false,
+  const claimCalls: string[] = [];
+  let loadCalls = 0;
+  const { handler, replies, released } = setup({
+    claimEvent: async (eventId) => {
+      claimCalls.push(eventId);
+      return false;
+    },
+    loadPayload: async () => {
+      loadCalls++;
+      return payload;
+    },
   });
   const response = await handler(post(JSON.stringify({
     events: [
@@ -111,8 +127,10 @@ Deno.test("ignores unsupported and duplicate events", async () => {
   })));
 
   assertEquals(response.status, 200);
-  assertEquals(claimed, []);
+  assertEquals(claimCalls, ["evt-1"]);
+  assertEquals(loadCalls, 0);
   assertEquals(replies, []);
+  assertEquals(released, []);
 });
 
 Deno.test("claims before rejecting an unauthorized user", async () => {
@@ -137,12 +155,52 @@ Deno.test("replies with usage for a malformed command", async () => {
 });
 
 Deno.test("loads the configured payload and replies with a price", async () => {
-  const { handler, replies } = setup();
+  const { handler, replies, released } = setup();
   const response = await handler(post(JSON.stringify({ events: [event()] })));
 
   assertEquals(response.status, 200);
   assertEquals(replies[0].includes("產品定價：NT$1,200"), true);
   assertEquals(replies[0].includes("客戶售價：NT$980"), true);
+  assertEquals(released, []);
+});
+
+Deno.test("releases a claimed event when payload loading fails", async () => {
+  const { handler, released } = setup({
+    loadPayload: async () => {
+      throw new Error("temporary database failure");
+    },
+  });
+  const response = await handler(post(JSON.stringify({ events: [event()] })));
+
+  assertEquals(response.status, 200);
+  assertEquals(released, ["evt-1"]);
+});
+
+Deno.test("releases a claimed event when replying fails", async () => {
+  const { handler, released } = setup({
+    reply: async () => {
+      throw new Error("temporary LINE failure");
+    },
+  });
+  const response = await handler(post(JSON.stringify({ events: [event()] })));
+
+  assertEquals(response.status, 200);
+  assertEquals(released, ["evt-1"]);
+});
+
+Deno.test("a release failure does not replace the original error", async () => {
+  const original = new Error("original sensitive failure");
+  let thrown: unknown;
+
+  try {
+    await releaseFailedClaim("evt-1", original, async () => {
+      throw new Error("release failure");
+    });
+  } catch (error) {
+    thrown = error;
+  }
+
+  assertEquals(thrown === original, true);
 });
 
 Deno.test("isolates rejected events and still returns 200", async () => {
@@ -169,4 +227,92 @@ Deno.test("isolates rejected events and still returns 200", async () => {
   } finally {
     console.error = originalError;
   }
+});
+
+Deno.test("database adapter handles claims, owner loads, and releases", async () => {
+  const calls: unknown[] = [];
+  let insertError: { code: string } | null = null;
+  const client = {
+    from(table: string) {
+      calls.push(["from", table]);
+      return {
+        insert(value: unknown) {
+          calls.push(["insert", value]);
+          return Promise.resolve({ error: insertError });
+        },
+        delete() {
+          calls.push(["delete"]);
+          return {
+            eq(column: string, value: string) {
+              calls.push(["release-eq", column, value]);
+              return Promise.resolve({ error: null });
+            },
+          };
+        },
+        select(column: string) {
+          calls.push(["select", column]);
+          return {
+            eq(filterColumn: string, value: string) {
+              calls.push(["load-eq", filterColumn, value]);
+              return {
+                single() {
+                  calls.push(["single"]);
+                  return Promise.resolve({ data: { payload }, error: null });
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const adapter = createDatabaseAdapter(
+    client as Parameters<typeof createDatabaseAdapter>[0],
+    "owner-id",
+  );
+
+  assertEquals(await adapter.claimEvent("evt-1"), true);
+  insertError = { code: "23505" };
+  assertEquals(await adapter.claimEvent("evt-1"), false);
+  assertEquals(await adapter.loadPayload(), payload);
+  await adapter.releaseEvent("evt-1");
+  assertEquals(calls, [
+    ["from", "line_webhook_events"],
+    ["insert", { event_id: "evt-1" }],
+    ["from", "line_webhook_events"],
+    ["insert", { event_id: "evt-1" }],
+    ["from", "pricebook_data"],
+    ["select", "payload"],
+    ["load-eq", "id", "owner-id"],
+    ["single"],
+    ["from", "line_webhook_events"],
+    ["delete"],
+    ["release-eq", "event_id", "evt-1"],
+  ]);
+});
+
+Deno.test("database adapter throws non-duplicate claim errors", async () => {
+  const failure = { code: "XX000" };
+  const client = {
+    from() {
+      return {
+        insert() {
+          return Promise.resolve({ error: failure });
+        },
+      };
+    },
+  };
+  const adapter = createDatabaseAdapter(
+    client as unknown as Parameters<typeof createDatabaseAdapter>[0],
+    "owner-id",
+  );
+  let thrown: unknown;
+
+  try {
+    await adapter.claimEvent("evt-1");
+  } catch (error) {
+    thrown = error;
+  }
+
+  assertEquals(thrown === failure, true);
 });
