@@ -98,17 +98,25 @@ export function createWebhookHandler(
       return new Response("Invalid signature", { status: 401 });
     }
 
-    let body: { events?: LineTextEvent[] };
+    let body: unknown;
     try {
       body = JSON.parse(rawBody);
     } catch {
       return new Response("Invalid JSON", { status: 400 });
     }
 
-    const events = Array.isArray(body.events) ? body.events : [];
+    const events = body !== null &&
+        typeof body === "object" &&
+        !Array.isArray(body) &&
+        "events" in body &&
+        Array.isArray(body.events)
+      ? body.events as LineTextEvent[]
+      : [];
     const results = await Promise.allSettled(events.map(handleEvent));
     for (const result of results) {
-      if (result.status === "rejected") console.error(result.reason);
+      if (result.status === "rejected") {
+        console.error("LINE webhook event failed");
+      }
     }
 
     return new Response("OK", { status: 200 });

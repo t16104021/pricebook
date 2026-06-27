@@ -82,6 +82,22 @@ Deno.test("returns 400 for signed invalid JSON", async () => {
   assertEquals(response.status, 400);
 });
 
+Deno.test("treats non-object payloads and non-array events as empty", async () => {
+  const { handler } = setup();
+  const bodies = [
+    "null",
+    JSON.stringify("events"),
+    JSON.stringify([]),
+    JSON.stringify({ events: {} }),
+  ];
+
+  for (const body of bodies) {
+    const response = await handler(post(body));
+    assertEquals(response.status, 200);
+    assertEquals(await response.text(), "OK");
+  }
+});
+
 Deno.test("ignores unsupported and duplicate events", async () => {
   const { handler, replies, claimed } = setup({
     claimEvent: async () => false,
@@ -132,11 +148,13 @@ Deno.test("loads the configured payload and replies with a price", async () => {
 Deno.test("isolates rejected events and still returns 200", async () => {
   const originalError = console.error;
   const errors: unknown[] = [];
-  console.error = (reason) => errors.push(reason);
+  console.error = (...values) => errors.push(values);
   try {
     const { handler } = setup({
       claimEvent: async () => {
-        throw new Error("database unavailable");
+        throw new Error(
+          "secret message reply-token customer-price NT$980",
+        );
       },
     });
     const response = await handler(post(JSON.stringify({
@@ -144,7 +162,10 @@ Deno.test("isolates rejected events and still returns 200", async () => {
     })));
 
     assertEquals(response.status, 200);
-    assertEquals(errors.length, 2);
+    assertEquals(errors, [
+      ["LINE webhook event failed"],
+      ["LINE webhook event failed"],
+    ]);
   } finally {
     console.error = originalError;
   }
