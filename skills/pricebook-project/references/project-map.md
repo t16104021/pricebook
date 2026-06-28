@@ -1,5 +1,23 @@
 # Pricebook Project Map
 
+## 中文總覽
+
+這個專案是「產品售價管理」系統：
+
+- 前端網頁部署在 GitHub Pages。
+- 登入與資料庫使用 Supabase。
+- 資料存在 `public.pricebook_data.payload`。
+- LINE 官方帳號查價使用 Supabase Edge Function。
+- Gemini/OpenAI 只負責把查價結果改寫成第二則 AI 回覆。
+
+重要原則：
+
+- GitHub 不存資料，只存程式碼。
+- Supabase 才是產品、客戶、價格、AI 設定的資料來源。
+- 不同 Supabase 帳號看到不同資料。
+- LINE bot 目前讀取 `PRICEBOOK_OWNER_ID` 指定帳號的資料。
+- AI 不可以接收整個資料庫，也不可以接收產品定價與價格日期。
+
 ## Files
 
 - `index.html`: static app shell, dialogs, toolbar buttons, templates.
@@ -21,6 +39,8 @@
 - LINE webhook URL: `https://fuhzrbbyqoojjguiuijf.supabase.co/functions/v1/line-price-query`.
 
 ## Data Shape
+
+中文說明：`payload` 是前端整包存進 Supabase 的資料。它包含設定與產品清單。`settings.aiReplyInstructions` 是後台「AI 設定」文字框儲存的位置。`products[].updatedAt` 是近期異動使用的實際操作日期，不是價格生效日。
 
 Main table: `public.pricebook_data`
 
@@ -56,6 +76,16 @@ One row per app user:
 `updatedAt` is frontend operation time for `/changed` recent changes. Price `date` is business effective date, not operation time.
 
 ## LINE Bot Behavior
+
+中文流程：
+
+1. 管理者用有權限的 LINE 帳號傳 `查價 客戶名稱 產品編號`。
+2. LINE 送 webhook 到 Supabase Edge Function。
+3. Function 驗證簽名和 userId 權限。
+4. Function 讀取 `PRICEBOOK_OWNER_ID` 的 pricebook payload。
+5. 先回固定格式查價結果。
+6. 如果 Gemini/OpenAI key 有設定，再回第二則 AI 話術。
+7. AI 回覆失敗時，不影響固定查價結果。
 
 Command format:
 
@@ -107,6 +137,7 @@ Never commit or display service-role keys, LINE tokens, Gemini/OpenAI keys, or p
 
 ## Known Decisions
 
+- 中文決策：`近期異動` 目前看 `updatedAt`，也就是系統操作時間；`歷史紀錄` 是搜尋時間軸文字，不等於近期異動。
 - GitHub alone does not store app data; Supabase stores user data.
 - Different Supabase Auth accounts see different data via RLS.
 - LINE bot reads one configured owner account, not the currently logged-in frontend user.

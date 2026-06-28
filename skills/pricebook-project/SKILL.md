@@ -5,6 +5,18 @@ description: Use when modifying, debugging, explaining, deploying, or reviewing 
 
 # Pricebook Project
 
+## 中文說明
+
+這個 Skill 是給「產品售價管理」專案使用的專屬開發指南。當工作內容跟前端後台、Supabase 資料庫、LINE 查價機器人、Gemini/OpenAI AI 回覆、Excel 匯入匯出、近期異動或歷史紀錄有關時，優先使用這份 Skill。
+
+目標是讓後續開發保持一致：
+
+- 改前端時知道要看 `index.html`、`app.js`、`styles.css`。
+- 改 LINE 查價時知道要看 `supabase/functions/line-price-query`。
+- 不把任何 secret、token、API key 寫進 GitHub 或前端。
+- AI 回覆只能做文字表達，不可以成為價格資料來源。
+- 修改後要跑對應驗證，必要時再部署 Supabase Function 或推送 GitHub Pages。
+
 ## Overview
 
 Use this skill for work on the product price manager in `/Users/jimmy/Documents/peactice`. Keep changes scoped, preserve data isolation, and verify both the browser frontend and the LINE/Supabase function path when relevant.
@@ -13,6 +25,7 @@ For the detailed map of files, data shapes, secrets, and current design decision
 
 ## Core Rules
 
+- 中文重點：這個專案的資料核心是 Supabase 的 `pricebook_data.payload`。前端登入帳號只看自己的資料；LINE bot 則讀取 `PRICEBOOK_OWNER_ID` 指定的資料列。
 - Treat `pricebook_data.payload` as the shared product data source.
 - Preserve per-account isolation: frontend users read/write only their own Supabase Auth row; the LINE bot reads the configured `PRICEBOOK_OWNER_ID` row.
 - Never put secrets in frontend code, docs, GitHub, or chat. Secrets live in Supabase Edge Function Secrets.
@@ -25,6 +38,14 @@ For the detailed map of files, data shapes, secrets, and current design decision
 
 ### Frontend UI/Data Changes
 
+中文流程：
+
+1. 先看 `index.html`、`app.js`、`styles.css`。
+2. 新的使用者設定要放在 `data.settings`，跟著 payload 存進 Supabase。
+3. 如果新增產品資料欄位，要確認 Excel 匯入/匯出是否也需要同步。
+4. 前端改完至少跑 `node --check app.js` 和格式檢查。
+5. 要更新正式網頁時，commit 後 push 到 GitHub。
+
 1. Inspect `index.html`, `app.js`, and `styles.css`.
 2. Keep the first screen as the usable app, not a landing page.
 3. Store user-facing settings under `data.settings` inside `payload`.
@@ -35,6 +56,14 @@ For the detailed map of files, data shapes, secrets, and current design decision
 6. If the user wants the live GitHub Pages site updated, commit and push after verification.
 
 ### Supabase/LINE Function Changes
+
+中文流程：
+
+1. 先看 `supabase/functions/line-price-query`。
+2. 行為改動要先補或更新 Deno test。
+3. 不要破壞 LINE signature 驗證、允許 userId 檢查、webhook 去重 claim/release。
+4. LINE 查價的固定格式回覆是主資料來源；AI 第二則只是話術。
+5. 要讓正式 LINE bot 更新時，部署 Supabase Edge Function。
 
 1. Inspect `supabase/functions/line-price-query`.
 2. Add or update Deno tests first for behavior changes.
@@ -48,6 +77,14 @@ For the detailed map of files, data shapes, secrets, and current design decision
    - `npx --yes supabase@2.108.0 functions deploy line-price-query --no-verify-jwt --project-ref fuhzrbbyqoojjguiuijf`
 
 ### AI Reply Changes
+
+中文規則：
+
+1. 預設 prompt 在 `DEFAULT_AI_REPLY_INSTRUCTIONS`。
+2. 後台自訂 prompt 存在 `payload.settings.aiReplyInstructions`。
+3. 給 LLM 的資料只能包含客戶名稱、產品編號、產品名稱、客戶售價、備註。
+4. 不可以把產品定價、日期、最後更新日、整個資料庫傳給 LLM。
+5. AI 失敗時，系統仍要保留固定查價回覆。
 
 1. Edit `supabase/functions/line-price-query/personal_reply.ts`.
 2. Preserve `DEFAULT_AI_REPLY_INSTRUCTIONS` unless the user asks to change the default.
