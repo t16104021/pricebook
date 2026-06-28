@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pricebook Project"
+  short_description: "Develop and deploy the pricebook app safely."
+  default_prompt: "Use the pricebook project skill to modify this product price manager."
