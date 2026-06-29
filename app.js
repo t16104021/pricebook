@@ -1256,7 +1256,7 @@ function hasQuantity(value) {
 }
 
 function formatQuantity(value) {
-  if (!hasQuantity(value)) return "未記錄";
+  if (!hasQuantity(value)) return "";
   return Number(value).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
 }
 
