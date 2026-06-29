@@ -809,6 +809,48 @@ label textarea {
     padding: 10px;
   }
 
+  .topbar {
+    gap: 14px;
+    margin-bottom: 14px;
+    padding: 6px 2px 0;
+  }
+
+  .topbar h1 {
+    font-size: 30px;
+    line-height: 1.08;
+  }
+
+  .topbar p {
+    margin-top: 8px;
+    font-size: 18px;
+    line-height: 1.35;
+  }
+
+  .top-actions {
+    display: grid;
+    grid-template-columns: 48px 48px minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .top-actions .icon-button {
+    width: 48px;
+    min-height: 44px;
+    font-size: 18px;
+  }
+
+  .top-actions .primary-button,
+  .top-actions .secondary-button {
+    min-height: 44px;
+    padding: 0 10px;
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  #addProductBtn {
+    grid-column: 1 / 4;
+  }
+
   .top-actions,
   .section-heading,
   .detail-actions,
