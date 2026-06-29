@@ -471,6 +471,18 @@ function commandParts(raw) {
   };
 }
 
+function isShortEnglishTerm(term) {
+  return /^[a-z]{1,3}$/.test(term);
+}
+
+function productFieldMatches(product, term) {
+  if (!term) return true;
+  const sku = product.sku.toLowerCase();
+  if (isShortEnglishTerm(term)) return sku.includes(term);
+  return `${product.sku} ${product.name} ${product.category}`.toLowerCase()
+    .includes(term);
+}
+
 function productMatches(product, parsed) {
   const currentBase = getCurrentBase(product);
   const customerText = product.sales.map((sale) => sale.customer).join(" ");
@@ -484,8 +496,7 @@ function productMatches(product, parsed) {
   }
 
   if (parsed.command === "product") {
-    return `${product.sku} ${product.name} ${product.category}`.toLowerCase()
-      .includes(parsed.term);
+    return productFieldMatches(product, parsed.term);
   }
   if (parsed.command === "customer") {
     return customerText.toLowerCase().includes(parsed.term);
