@@ -88,6 +88,7 @@ let timelineStart = "";
 let timelineEnd = "";
 let timelineCustomerSearch = "";
 let timelineDeleteTarget = null;
+let timelineEditTarget = null;
 let customerSearch = "";
 let customerInitial = "all";
 let customerPage = 1;
@@ -768,7 +769,8 @@ function renderTimeline(product) {
     const row = document.createElement("article");
     row.className = "timeline-swipe";
     row.innerHTML = `
-      <button class="timeline-delete-action" type="button" aria-label="刪除這筆時間紀錄">刪除</button>
+      <button class="timeline-action timeline-delete-action" type="button" aria-label="刪除這筆時間紀錄">刪除</button>
+      <button class="timeline-action timeline-edit-action" type="button" aria-label="編輯這筆時間紀錄">編輯</button>
       <div class="timeline-item">
         <div class="timeline-date">${formatDate(item.date)}</div>
         <div class="timeline-body">
@@ -788,6 +790,10 @@ function renderTimeline(product) {
     row.querySelector(".timeline-delete-action").addEventListener(
       "click",
       () => openDeleteTimelineDialog(item),
+    );
+    row.querySelector(".timeline-edit-action").addEventListener(
+      "click",
+      () => openEditTimelineDialog(item),
     );
     els.timeline.append(row);
   });
@@ -823,13 +829,15 @@ function addTimelineSwipe(row, item) {
     content.classList.remove("dragging");
 
     if (Math.abs(currentX) >= threshold) {
-      row.classList.add("ready-delete");
+      row.classList.toggle("ready-delete", currentX > 0);
+      row.classList.toggle("ready-edit", currentX < 0);
       content.style.transform = `translateX(${currentX > 0 ? 86 : -86}px)`;
       openedBySwipe = true;
       return;
     }
 
     row.classList.remove("ready-delete");
+    row.classList.remove("ready-edit");
     content.style.transform = "";
   });
 
@@ -837,6 +845,7 @@ function addTimelineSwipe(row, item) {
     isDragging = false;
     content.classList.remove("dragging");
     row.classList.remove("ready-delete");
+    row.classList.remove("ready-edit");
     content.style.transform = "";
   });
 
@@ -845,8 +854,12 @@ function addTimelineSwipe(row, item) {
       openedBySwipe = false;
       return;
     }
-    if (!row.classList.contains("ready-delete")) return;
+    if (
+      !row.classList.contains("ready-delete") &&
+      !row.classList.contains("ready-edit")
+    ) return;
     row.classList.remove("ready-delete");
+    row.classList.remove("ready-edit");
     content.style.transform = "";
   });
 
@@ -910,6 +923,7 @@ function openBaseDialog() {
   const product = getSelectedProduct();
   if (!product) return;
   const current = getCurrentBase(product);
+  timelineEditTarget = null;
   els.basePriceForm.reset();
   els.basePriceForm.elements.price.value = current.price;
   els.basePriceForm.elements.date.value = today();
@@ -917,6 +931,7 @@ function openBaseDialog() {
 }
 
 function openSaleDialog(customer = "", price = "", quantity = "") {
+  timelineEditTarget = null;
   els.saleForm.reset();
   els.saleForm.elements.customer.value = customer;
   els.saleForm.elements.price.value = price;
@@ -1013,6 +1028,38 @@ function openDeleteTimelineDialog(item) {
   els.deleteTimelineDialog.showModal();
 }
 
+function openEditTimelineDialog(item) {
+  const product = getSelectedProduct();
+  if (!product) return;
+
+  if (item.type === "base") {
+    const entry = product.basePrices[item.priceIndex];
+    if (!entry) return;
+    timelineEditTarget = item;
+    els.basePriceForm.reset();
+    els.basePriceForm.elements.price.value = entry.price;
+    els.basePriceForm.elements.date.value = entry.date;
+    els.basePriceForm.elements.note.value = entry.note || "";
+    els.basePriceDialog.showModal();
+    return;
+  }
+
+  const sale = product.sales[item.saleIndex];
+  const entry = sale?.prices[item.priceIndex];
+  if (!sale || !entry) return;
+
+  timelineEditTarget = item;
+  els.saleForm.reset();
+  els.saleForm.elements.customer.value = sale.customer;
+  els.saleForm.elements.price.value = entry.price;
+  els.saleForm.elements.quantity.value = hasQuantity(entry.quantity)
+    ? entry.quantity
+    : "";
+  els.saleForm.elements.date.value = entry.date;
+  els.saleForm.elements.note.value = entry.note || "";
+  els.saleDialog.showModal();
+}
+
 function deleteTimelineTarget() {
   const product = getSelectedProduct();
   if (!product || !timelineDeleteTarget) return;
@@ -1041,11 +1088,19 @@ function updateBaseFromForm() {
   const product = getSelectedProduct();
   if (!product) return;
   const form = els.basePriceForm.elements;
-  product.basePrices.push({
+  const entry = {
     price: Number(form.price.value),
     date: form.date.value,
     note: form.note.value.trim() || "定價更新",
-  });
+  };
+
+  if (timelineEditTarget?.type === "base") {
+    product.basePrices[timelineEditTarget.priceIndex] = entry;
+    timelineEditTarget = null;
+  } else {
+    product.basePrices.push(entry);
+  }
+
   markProductChanged(product);
   saveData();
   render();
@@ -1056,6 +1111,39 @@ function updateSaleFromForm() {
   if (!product) return;
   const form = els.saleForm.elements;
   const customer = form.customer.value.trim();
+  const entry = {
+    price: Number(form.price.value),
+    quantity: normalizeQuantity(form.quantity.value),
+    date: form.date.value,
+    note: form.note.value.trim() || "客戶售價更新",
+  };
+
+  if (timelineEditTarget?.type === "sale") {
+    const oldSale = product.sales[timelineEditTarget.saleIndex];
+    if (oldSale && oldSale.customer === customer) {
+      oldSale.prices[timelineEditTarget.priceIndex] = entry;
+    } else {
+      if (oldSale) {
+        oldSale.prices.splice(timelineEditTarget.priceIndex, 1);
+        if (!oldSale.prices.length) {
+          product.sales.splice(timelineEditTarget.saleIndex, 1);
+        }
+      }
+      let targetSale = product.sales.find((item) => item.customer === customer);
+      if (!targetSale) {
+        targetSale = { customer, prices: [] };
+        product.sales.push(targetSale);
+      }
+      targetSale.prices.push(entry);
+    }
+
+    timelineEditTarget = null;
+    markProductChanged(product);
+    saveData();
+    render();
+    return;
+  }
+
   let sale = product.sales.find((item) => item.customer === customer);
 
   if (!sale) {
@@ -1063,12 +1151,7 @@ function updateSaleFromForm() {
     product.sales.push(sale);
   }
 
-  sale.prices.push({
-    price: Number(form.price.value),
-    quantity: normalizeQuantity(form.quantity.value),
-    date: form.date.value,
-    note: form.note.value.trim() || "客戶售價更新",
-  });
+  sale.prices.push(entry);
 
   markProductChanged(product);
   saveData();
@@ -1550,11 +1633,19 @@ els.deleteTimelineDialog.addEventListener("close", () => {
 });
 
 els.basePriceDialog.addEventListener("close", () => {
-  if (els.basePriceDialog.returnValue === "confirm") updateBaseFromForm();
+  if (els.basePriceDialog.returnValue === "confirm") {
+    updateBaseFromForm();
+    return;
+  }
+  timelineEditTarget = null;
 });
 
 els.saleDialog.addEventListener("close", () => {
-  if (els.saleDialog.returnValue === "confirm") updateSaleFromForm();
+  if (els.saleDialog.returnValue === "confirm") {
+    updateSaleFromForm();
+    return;
+  }
+  timelineEditTarget = null;
 });
 
 els.resetPasswordDialog.addEventListener("close", async () => {

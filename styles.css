@@ -504,28 +504,35 @@ th:last-child {
   position: relative;
   overflow: hidden;
   border-radius: 8px;
-  background: var(--danger);
+  background: var(--surface-soft);
 }
 
-.timeline-delete-action {
+.timeline-action {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   border: 0;
   padding: 0 22px;
-  background: var(--danger);
   color: white;
   font-weight: 800;
+  pointer-events: none;
 }
 
-.timeline-delete-action::before {
-  content: "刪除";
+.timeline-delete-action {
+  justify-content: flex-start;
+  background: var(--danger);
 }
 
-.timeline-swipe.ready-delete .timeline-delete-action {
+.timeline-edit-action {
+  justify-content: flex-end;
+  background: var(--accent);
+}
+
+.timeline-swipe.ready-delete .timeline-delete-action,
+.timeline-swipe.ready-edit .timeline-edit-action {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+  pointer-events: auto;
 }
 
 .timeline-item {
