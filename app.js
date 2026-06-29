@@ -1924,6 +1924,7 @@ els.resetPasswordDialog.addEventListener("close", async () => {
   if (loaded) {
     showApp();
     render();
+    alert("密碼已更新成功。");
   }
 });
 
