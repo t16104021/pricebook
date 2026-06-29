@@ -1,4 +1,5 @@
 const STORAGE_KEY_PREFIX = "pricing-manager-data-v1";
+const startedFromPasswordRecoveryLink = isPasswordRecoveryUrl();
 
 const emptyData = {
   settings: {},
@@ -422,7 +423,7 @@ function initSupabase() {
     window.PRICEBOOK_SUPABASE.anonKey,
   );
   dbClient.auth.onAuthStateChange((event) => {
-    if (event === "PASSWORD_RECOVERY" || isPasswordRecoveryUrl()) {
+    if (event === "PASSWORD_RECOVERY" || startedFromPasswordRecoveryLink) {
       openResetPasswordDialog();
     }
   });
@@ -446,7 +447,7 @@ async function initDataSource() {
   if (loaded) {
     showApp();
     render();
-    if (isPasswordRecoveryUrl()) {
+    if (startedFromPasswordRecoveryLink) {
       openResetPasswordDialog();
     }
   }
