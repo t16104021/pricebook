@@ -330,6 +330,9 @@ const els = {
   resetPasswordDialog: document.querySelector("#resetPasswordDialog"),
   resetPasswordForm: document.querySelector("#resetPasswordForm"),
   resetPasswordError: document.querySelector("#resetPasswordError"),
+  resetPasswordSubmit: document.querySelector(
+    "#resetPasswordForm button[value='confirm']",
+  ),
   productItemTemplate: document.querySelector("#productItemTemplate"),
 };
 
@@ -554,27 +557,42 @@ async function signOut() {
 
 function openResetPasswordDialog() {
   els.resetPasswordForm.reset();
+  els.resetPasswordSubmit.disabled = false;
+  els.resetPasswordSubmit.textContent = "更新密碼";
   els.resetPasswordError.classList.add("hidden");
   if (!els.resetPasswordDialog.open) {
     els.resetPasswordDialog.showModal();
   }
 }
 
+function showResetPasswordError(message) {
+  els.resetPasswordError.textContent = message;
+  els.resetPasswordError.classList.remove("hidden");
+}
+
+function setResetPasswordBusy(isBusy) {
+  els.resetPasswordSubmit.disabled = isBusy;
+  els.resetPasswordSubmit.textContent = isBusy ? "更新中" : "更新密碼";
+}
+
 async function updateRecoveredPassword() {
+  if (!dbClient) {
+    showResetPasswordError("目前未連上雲端登入服務，請重新整理後再試一次。");
+    return false;
+  }
+
   const form = els.resetPasswordForm.elements;
   const password = form.password.value;
   const confirmPassword = form.confirmPassword.value;
 
   if (password !== confirmPassword) {
-    els.resetPasswordError.textContent = "兩次輸入的新密碼不一致。";
-    els.resetPasswordError.classList.remove("hidden");
+    showResetPasswordError("兩次輸入的新密碼不一致。");
     return false;
   }
 
   const { error } = await dbClient.auth.updateUser({ password });
   if (error) {
-    els.resetPasswordError.textContent = `更新密碼失敗：${error.message}`;
-    els.resetPasswordError.classList.remove("hidden");
+    showResetPasswordError(`更新密碼失敗：${error.message}`);
     return false;
   }
 
@@ -602,6 +620,57 @@ async function sendPasswordChangeNotification() {
   }
 
   return result?.sent === true;
+}
+
+async function handleResetPasswordSubmit(event) {
+  event.preventDefault();
+
+  if (event.submitter?.value === "cancel") {
+    els.resetPasswordDialog.close("cancel");
+    return;
+  }
+
+  els.resetPasswordError.classList.add("hidden");
+  setResetPasswordBusy(true);
+
+  try {
+    const updated = await updateRecoveredPassword();
+    if (!updated) return;
+
+    const notificationSent = await sendPasswordChangeNotification();
+    const { data: sessionData, error } = await dbClient.auth.getSession();
+    if (error || !sessionData.session) {
+      showResetPasswordError(
+        error
+          ? `讀取登入狀態失敗：${error.message}`
+          : "登入狀態已失效，請重新登入。",
+      );
+      return;
+    }
+
+    const loaded = await loadCloudData(sessionData.session.user.id);
+    if (!loaded) {
+      showResetPasswordError("密碼已更新，但資料重新讀取失敗，請重新登入。");
+      return;
+    }
+
+    els.resetPasswordDialog.close("confirm");
+    showApp();
+    render();
+    alert(
+      notificationSent
+        ? "密碼已更新成功，通知信已寄出。"
+        : "密碼已更新成功，但通知信暫時未寄出。",
+    );
+  } catch (error) {
+    showResetPasswordError(
+      `更新密碼失敗：${error?.message || "請稍後再試一次。"}`,
+    );
+  } finally {
+    if (els.resetPasswordDialog.open) {
+      setResetPasswordBusy(false);
+    }
+  }
 }
 
 function currency(value) {
@@ -1935,33 +2004,7 @@ els.saleDialog.addEventListener("close", () => {
   timelineEditTarget = null;
 });
 
-els.resetPasswordDialog.addEventListener("close", async () => {
-  if (els.resetPasswordDialog.returnValue !== "confirm") return;
-
-  const updated = await updateRecoveredPassword();
-  if (!updated) {
-    requestAnimationFrame(() => els.resetPasswordDialog.showModal());
-    return;
-  }
-
-  const notificationSent = await sendPasswordChangeNotification();
-  const { data: sessionData, error } = await dbClient.auth.getSession();
-  if (error || !sessionData.session) {
-    showAuth(error ? `讀取登入狀態失敗：${error.message}` : "");
-    return;
-  }
-
-  const loaded = await loadCloudData(sessionData.session.user.id);
-  if (loaded) {
-    showApp();
-    render();
-    alert(
-      notificationSent
-        ? "密碼已更新成功，通知信已寄出。"
-        : "密碼已更新成功，但通知信暫時未寄出。",
-    );
-  }
-});
+els.resetPasswordForm.addEventListener("submit", handleResetPasswordSubmit);
 
 els.aiSettingsDialog.addEventListener("close", () => {
   if (els.aiSettingsDialog.returnValue === "confirm") saveAiSettingsFromForm();
