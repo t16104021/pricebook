@@ -272,7 +272,7 @@ h1 {
   min-height: 74px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 12px;
   text-align: left;
   background: transparent;
@@ -302,9 +302,9 @@ h1 {
 }
 
 .item-main {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: calc(100% - 104px);
+  max-width: none;
 }
 
 .item-main small {
@@ -856,6 +856,15 @@ label textarea {
   .detail-actions,
   .customer-filter-row {
     flex-wrap: wrap;
+  }
+
+  .product-item {
+    justify-content: flex-start;
+  }
+
+  .item-main {
+    flex: 0 1 auto;
+    max-width: calc(100% - 112px);
   }
 
   .panel-header,
