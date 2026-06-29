@@ -402,6 +402,13 @@ function showApp() {
   els.appShell.classList.remove("hidden");
 }
 
+function isPasswordRecoveryUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return params.get("type") === "recovery" ||
+    hashParams.get("type") === "recovery";
+}
+
 function initSupabase() {
   if (!hasSupabaseConfig() || !window.supabase) {
     showAuth(
@@ -415,7 +422,7 @@ function initSupabase() {
     window.PRICEBOOK_SUPABASE.anonKey,
   );
   dbClient.auth.onAuthStateChange((event) => {
-    if (event === "PASSWORD_RECOVERY") {
+    if (event === "PASSWORD_RECOVERY" || isPasswordRecoveryUrl()) {
       openResetPasswordDialog();
     }
   });
@@ -439,6 +446,9 @@ async function initDataSource() {
   if (loaded) {
     showApp();
     render();
+    if (isPasswordRecoveryUrl()) {
+      openResetPasswordDialog();
+    }
   }
 }
 
@@ -564,6 +574,7 @@ async function updateRecoveredPassword() {
     return false;
   }
 
+  window.history.replaceState(null, "", window.location.pathname);
   return true;
 }
 
