@@ -310,6 +310,7 @@ const els = {
   exportBtn: document.querySelector("#exportBtn"),
   importFile: document.querySelector("#importFile"),
   aiSettingsBtn: document.querySelector("#aiSettingsBtn"),
+  changePasswordBtn: document.querySelector("#changePasswordBtn"),
   aiSettingsDialog: document.querySelector("#aiSettingsDialog"),
   aiSettingsForm: document.querySelector("#aiSettingsForm"),
   productDialog: document.querySelector("#productDialog"),
@@ -1858,6 +1859,7 @@ els.updateBaseBtn.addEventListener("click", openBaseDialog);
 els.addSaleBtn.addEventListener("click", () => openSaleDialog());
 els.exportBtn.addEventListener("click", exportData);
 els.aiSettingsBtn.addEventListener("click", openAiSettingsDialog);
+els.changePasswordBtn.addEventListener("click", openResetPasswordDialog);
 els.importFile.addEventListener("change", (event) => {
   const [file] = event.target.files;
   if (file) importData(file);
