@@ -95,3 +95,22 @@ https://t16104021.github.io/pricebook/
 - `supabase-config.js` 的 anon key 是公開前端 key，不是 service role key。
 - 不要把 service role key 放進任何前端檔案。
 - GitHub Pages 只能跑靜態網站，所以不再使用 `server.py`、SQLite 或 Render。
+
+## 密碼更新通知信
+
+網站內「修改密碼」成功後會呼叫 Supabase Edge Function
+`notify-password-change`，寄出「密碼已更新」通知信。通知信不包含新密碼。
+
+需要先到 Supabase Dashboard 的 Edge Function Secrets 設定：
+
+- `RESEND_API_KEY`: Resend API key。
+- `PASSWORD_NOTICE_FROM`: 寄件人，例如 `產品售價管理 <notice@your-domain.com>`。
+
+若沒有設定 `RESEND_API_KEY`，密碼仍會更新成功，但畫面會提示通知信暫時未寄出。
+
+部署 function：
+
+```bash
+supabase functions deploy notify-password-change \
+  --project-ref fuhzrbbyqoojjguiuijf
+```

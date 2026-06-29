@@ -580,6 +580,28 @@ async function updateRecoveredPassword() {
   return true;
 }
 
+async function sendPasswordChangeNotification() {
+  if (!dbClient) return false;
+
+  const { data: sessionData } = await dbClient.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) return false;
+
+  const { data: result, error } = await dbClient.functions.invoke(
+    "notify-password-change",
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  if (error) {
+    console.warn("Password change notification failed", error);
+    return false;
+  }
+
+  return result?.sent === true;
+}
+
 function currency(value) {
   return new Intl.NumberFormat("zh-TW", {
     style: "currency",
@@ -1914,6 +1936,7 @@ els.resetPasswordDialog.addEventListener("close", async () => {
     return;
   }
 
+  const notificationSent = await sendPasswordChangeNotification();
   const { data: sessionData, error } = await dbClient.auth.getSession();
   if (error || !sessionData.session) {
     showAuth(error ? `讀取登入狀態失敗：${error.message}` : "");
@@ -1924,7 +1947,11 @@ els.resetPasswordDialog.addEventListener("close", async () => {
   if (loaded) {
     showApp();
     render();
-    alert("密碼已更新成功。");
+    alert(
+      notificationSent
+        ? "密碼已更新成功，通知信已寄出。"
+        : "密碼已更新成功，但通知信暫時未寄出。",
+    );
   }
 });
 

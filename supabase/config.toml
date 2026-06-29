@@ -2,3 +2,6 @@ project_id = "fuhzrbbyqoojjguiuijf"
 
 [functions.line-price-query]
 verify_jwt = false
+
+[functions.notify-password-change]
+verify_jwt = true
