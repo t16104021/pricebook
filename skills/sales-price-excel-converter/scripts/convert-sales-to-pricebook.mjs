@@ -61,6 +61,7 @@ async function readSourceRows(workbook) {
   const index = Object.fromEntries(headers.map((header, i) => [header, i]));
   const required = [
     "銷貨日期(C)",
+    "銷貨單別",
     "銷貨品號",
     "品名",
     "客戶簡稱",
@@ -72,6 +73,7 @@ async function readSourceRows(workbook) {
 
   return values.slice(1).map((row) => ({
     date: normalizeDate(row[index["銷貨日期(C)"]]),
+    saleType: cleanText(row[index["銷貨單別"]]),
     sku: cleanText(row[index["銷貨品號"]]),
     name: cleanText(row[index["品名"]]),
     customer: cleanText(row[index["客戶簡稱"]]),
@@ -80,7 +82,10 @@ async function readSourceRows(workbook) {
     lineNo: cleanText(row[index["銷貨序號"]]),
     quantity: toNumber(row[index["銷貨數量"]]),
     price: toNumber(row[index["原幣銷貨單價"]]),
-  })).filter((row) => row.date && row.sku && row.name && row.price !== null);
+  })).filter((row) =>
+    row.saleType === "2301" && row.date && row.sku && row.name &&
+    row.price !== null
+  );
 }
 
 async function readTemplateHeaders(workbook) {
@@ -159,7 +164,7 @@ function convertRows(rows) {
         row.sku,
         row.customer || row.customerCode || "未命名客戶",
         row.date,
-        roundMoney(row.price),
+        roundMoney(row.price * 1.05),
         row.quantity === null ? "" : roundMoney(row.quantity),
         buildNote(row),
       ];
@@ -211,7 +216,6 @@ function classifyProductName(name) {
 function buildNote(row) {
   const pieces = [];
   if (row.orderNo) pieces.push(`銷貨單號:${row.orderNo}`);
-  if (row.lineNo) pieces.push(`序號:${row.lineNo}`);
   if (row.customerCode) pieces.push(`客戶代號:${row.customerCode}`);
   return pieces.join("；");
 }
@@ -274,12 +278,12 @@ async function writeWorkbook(converted, templateHeaders, output) {
       ],
       [
         "來源規則",
-        "SKU=銷貨品號；最近異動=該 SKU 最新銷貨日期；產品名稱=品名；產品定價=歷史最高原幣銷貨單價。",
+        "只納入銷貨單別 2301；SKU=銷貨品號；最近異動=該 SKU 最新銷貨日期；產品名稱=品名；產品定價=歷史最高原幣銷貨單價。",
       ],
       ["分類方式", "分類依品名關鍵字判讀；同品名固定得到同一分類。"],
       [
         "客戶售價",
-        "每筆銷貨資料會成為一筆客戶售價歷史，數量來自銷貨數量，備註保留銷貨單號、序號與客戶代號。",
+        "每筆銷貨資料會成為一筆客戶售價歷史，客戶售價=原幣銷貨單價 x 1.05，數量來自銷貨數量，備註保留銷貨單號與客戶代號。",
       ],
       [
         "對應規則",
