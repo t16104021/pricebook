@@ -23,6 +23,8 @@ body {
   margin: 0;
   color: var(--text);
   background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 button,
@@ -277,6 +279,8 @@ h1 {
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 12px;
+  font-size: 15px;
+  line-height: 1.35;
 }
 
 .product-item:hover,
@@ -297,13 +301,22 @@ h1 {
   white-space: nowrap;
 }
 
+.item-main strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
 .item-main small {
   color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
   margin-top: 4px;
 }
 
 .item-price {
   white-space: nowrap;
+  font-size: 15px;
+  line-height: 1.35;
   font-weight: 800;
   color: var(--accent-strong);
 }
