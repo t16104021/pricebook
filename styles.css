@@ -509,7 +509,9 @@ th:last-child {
 
 .timeline-action {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  width: 112px;
   display: flex;
   align-items: center;
   border: 0;
@@ -520,12 +522,14 @@ th:last-child {
 }
 
 .timeline-delete-action {
+  left: 0;
   justify-content: flex-start;
   background: var(--danger);
   z-index: 1;
 }
 
 .timeline-edit-action {
+  right: 0;
   justify-content: flex-end;
   background: var(--accent);
   z-index: 1;
