@@ -518,7 +518,9 @@ th:last-child {
   padding: 0 22px;
   color: white;
   font-weight: 800;
+  opacity: 0;
   pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
 .timeline-delete-action {
@@ -538,6 +540,7 @@ th:last-child {
 .timeline-swipe.ready-delete .timeline-delete-action,
 .timeline-swipe.ready-edit .timeline-edit-action {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+  opacity: 1;
   pointer-events: auto;
   z-index: 2;
 }
