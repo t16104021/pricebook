@@ -457,6 +457,21 @@ th:last-child {
   font-weight: 800;
 }
 
+.discount-rate {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.discount-rate-over {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.muted-value {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .timeline-heading {
   margin-top: 24px;
 }

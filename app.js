@@ -687,16 +687,14 @@ function renderSales(product, basePrice) {
   renderCustomerPagination(totalPages);
 
   visibleSales.forEach(({ sale, current }) => {
-    const diff = current.price - basePrice;
+    const discountRate = calculateDiscountRate(current.price, basePrice);
     const tr = document.createElement("tr");
     tr.innerHTML = `
         <td>${escapeHtml(sale.customer)}</td>
         <td><strong>${currency(current.price)}</strong></td>
         <td>${formatQuantity(current.quantity)}</td>
         <td>${formatDate(current.date)}</td>
-        <td class="${diff >= 0 ? "margin-positive" : "margin-negative"}">${
-      diff >= 0 ? "+" : ""
-    }${currency(diff)}</td>
+        <td class="${discountRateClass(discountRate)}">${formatDiscountRate(discountRate)}</td>
         <td><button class="secondary-button compact" data-customer="${
       escapeHtml(sale.customer)
     }">更新</button></td>
@@ -707,6 +705,24 @@ function renderSales(product, basePrice) {
     );
     els.salesTable.append(tr);
   });
+}
+
+function calculateDiscountRate(salePrice, basePrice) {
+  if (!Number.isFinite(salePrice) || !Number.isFinite(basePrice) || basePrice <= 0) {
+    return null;
+  }
+  return (salePrice / basePrice) * 100;
+}
+
+function formatDiscountRate(rate) {
+  if (rate === null) return "尚未設定";
+  const rounded = Math.round((rate + Number.EPSILON) * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
+}
+
+function discountRateClass(rate) {
+  if (rate === null) return "muted-value";
+  return rate <= 100 ? "discount-rate" : "discount-rate-over";
 }
 
 function renderCustomerPagination(totalPages) {
