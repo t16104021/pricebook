@@ -66,6 +66,7 @@ async function readSourceRows(workbook) {
     "品名",
     "客戶簡稱",
     "原幣銷貨單價",
+    "本幣銷貨未稅金額",
   ];
   for (const header of required) {
     if (!(header in index)) throw new Error(`來源檔缺少必要欄位：${header}`);
@@ -82,9 +83,11 @@ async function readSourceRows(workbook) {
     lineNo: cleanText(row[index["銷貨序號"]]),
     quantity: toNumber(row[index["銷貨數量"]]),
     price: toNumber(row[index["原幣銷貨單價"]]),
+    untaxedAmount: toNumber(row[index["本幣銷貨未稅金額"]]),
   })).filter((row) =>
     row.saleType === "2301" && row.date && row.sku && row.name &&
-    row.price !== null
+    row.price !== null && row.quantity !== null && row.quantity !== 0 &&
+    row.untaxedAmount !== null
   );
 }
 
@@ -164,7 +167,7 @@ function convertRows(rows) {
         row.sku,
         row.customer || row.customerCode || "未命名客戶",
         row.date,
-        roundMoney(row.price * 1.05),
+        roundMoney((row.untaxedAmount * 1.05) / row.quantity),
         row.quantity === null ? "" : roundMoney(row.quantity),
         buildNote(row),
       ];
@@ -283,7 +286,7 @@ async function writeWorkbook(converted, templateHeaders, output) {
       ["分類方式", "分類依品名關鍵字判讀；同品名固定得到同一分類。"],
       [
         "客戶售價",
-        "每筆銷貨資料會成為一筆客戶售價歷史，客戶售價=原幣銷貨單價 x 1.05，數量來自銷貨數量，備註保留銷貨單號與客戶代號。",
+        "每筆銷貨資料會成為一筆客戶售價歷史，客戶售價=(本幣銷貨未稅金額 x 1.05) / 銷貨數量，備註保留銷貨單號與客戶代號。",
       ],
       [
         "對應規則",
