@@ -522,17 +522,20 @@ th:last-child {
 .timeline-delete-action {
   justify-content: flex-start;
   background: var(--danger);
+  z-index: 1;
 }
 
 .timeline-edit-action {
   justify-content: flex-end;
   background: var(--accent);
+  z-index: 1;
 }
 
 .timeline-swipe.ready-delete .timeline-delete-action,
 .timeline-swipe.ready-edit .timeline-edit-action {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
   pointer-events: auto;
+  z-index: 2;
 }
 
 .timeline-item {
