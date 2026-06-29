@@ -281,6 +281,15 @@ h1 {
   padding: 12px;
   font-size: 15px;
   line-height: 1.35;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+.product-item,
+.product-item * {
+  font-family: inherit;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
 }
 
 .product-item:hover,
@@ -304,6 +313,7 @@ h1 {
 .item-main strong {
   font-size: 15px;
   line-height: 1.35;
+  font-weight: 800;
 }
 
 .item-main small {
