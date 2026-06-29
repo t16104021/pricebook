@@ -601,11 +601,15 @@ async function updateRecoveredPassword() {
 }
 
 async function sendPasswordChangeNotification() {
-  if (!dbClient) return false;
+  if (!dbClient) {
+    return { sent: false, message: "尚未連上雲端服務。" };
+  }
 
   const { data: sessionData } = await dbClient.auth.getSession();
   const accessToken = sessionData.session?.access_token;
-  if (!accessToken) return false;
+  if (!accessToken) {
+    return { sent: false, message: "找不到登入憑證，請重新登入後再試。" };
+  }
 
   const { data: result, error } = await dbClient.functions.invoke(
     "notify-password-change",
@@ -616,10 +620,19 @@ async function sendPasswordChangeNotification() {
 
   if (error) {
     console.warn("Password change notification failed", error);
-    return false;
+    return {
+      sent: false,
+      message: error.message || "通知信功能呼叫失敗。",
+    };
   }
 
-  return result?.sent === true;
+  if (result?.sent === true) return { sent: true };
+
+  const detail = result?.detail || result?.reason;
+  return {
+    sent: false,
+    message: detail ? `通知信未寄出：${detail}` : "通知信暫時未寄出。",
+  };
 }
 
 async function handleResetPasswordSubmit(event) {
@@ -637,7 +650,7 @@ async function handleResetPasswordSubmit(event) {
     const updated = await updateRecoveredPassword();
     if (!updated) return;
 
-    const notificationSent = await sendPasswordChangeNotification();
+    const notification = await sendPasswordChangeNotification();
     const { data: sessionData, error } = await dbClient.auth.getSession();
     if (error || !sessionData.session) {
       showResetPasswordError(
@@ -658,9 +671,9 @@ async function handleResetPasswordSubmit(event) {
     showApp();
     render();
     alert(
-      notificationSent
+      notification.sent
         ? "密碼已更新成功，通知信已寄出。"
-        : "密碼已更新成功，但通知信暫時未寄出。",
+        : `密碼已更新成功，但${notification.message}`,
     );
   } catch (error) {
     showResetPasswordError(

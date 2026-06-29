@@ -15,6 +15,17 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   });
 }
 
+function errorDetail(details: string): string {
+  try {
+    const parsed = JSON.parse(details);
+    if (typeof parsed.message === "string") return parsed.message;
+    if (typeof parsed.error === "string") return parsed.error;
+  } catch {
+    // Resend normally returns JSON, but keep plain text details readable.
+  }
+  return details.trim().slice(0, 300);
+}
+
 function requiredEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`Missing environment variable: ${name}`);
@@ -105,11 +116,17 @@ Deno.serve(async (request) => {
 
     if (!response.ok) {
       const details = await response.text();
+      const detail = errorDetail(details);
       console.error("Failed to send password notice", {
         status: response.status,
         details,
       });
-      return jsonResponse({ sent: false, reason: "email_send_failed" }, 502);
+      return jsonResponse({
+        sent: false,
+        reason: "email_send_failed",
+        status: response.status,
+        detail,
+      });
     }
 
     return jsonResponse({ sent: true });
