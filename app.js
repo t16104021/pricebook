@@ -17,6 +17,168 @@ const DEFAULT_AI_REPLY_INSTRUCTIONS = [
   "回覆控制在 1 到 2 句，不要說資料庫顯示或系統查詢到。",
 ].join("\n");
 
+const BOPOMOFO_ORDER = [
+  "ㄅ",
+  "ㄆ",
+  "ㄇ",
+  "ㄈ",
+  "ㄉ",
+  "ㄊ",
+  "ㄋ",
+  "ㄌ",
+  "ㄍ",
+  "ㄎ",
+  "ㄏ",
+  "ㄐ",
+  "ㄑ",
+  "ㄒ",
+  "ㄓ",
+  "ㄔ",
+  "ㄕ",
+  "ㄖ",
+  "ㄗ",
+  "ㄘ",
+  "ㄙ",
+  "ㄧ",
+  "ㄨ",
+  "ㄩ",
+  "其他",
+];
+
+const CUSTOMER_BOPOMOFO_MAP = {
+  丁: "ㄉ",
+  于: "ㄩ",
+  王: "ㄨ",
+  方: "ㄈ",
+  毛: "ㄇ",
+  尹: "ㄧ",
+  孔: "ㄎ",
+  古: "ㄍ",
+  左: "ㄗ",
+  石: "ㄕ",
+  田: "ㄊ",
+  白: "ㄅ",
+  伍: "ㄨ",
+  朱: "ㄓ",
+  江: "ㄐ",
+  何: "ㄏ",
+  吳: "ㄨ",
+  呂: "ㄌ",
+  宋: "ㄙ",
+  李: "ㄌ",
+  沈: "ㄕ",
+  汪: "ㄨ",
+  邱: "ㄑ",
+  邵: "ㄕ",
+  周: "ㄓ",
+  林: "ㄌ",
+  侯: "ㄏ",
+  姚: "ㄧ",
+  施: "ㄕ",
+  洪: "ㄏ",
+  胡: "ㄏ",
+  范: "ㄈ",
+  韋: "ㄨ",
+  唐: "ㄊ",
+  孫: "ㄙ",
+  徐: "ㄒ",
+  翁: "ㄨ",
+  袁: "ㄩ",
+  高: "ㄍ",
+  張: "ㄓ",
+  梁: "ㄌ",
+  許: "ㄒ",
+  郭: "ㄍ",
+  陳: "ㄔ",
+  彭: "ㄆ",
+  曾: "ㄗ",
+  游: "ㄧ",
+  程: "ㄔ",
+  黃: "ㄏ",
+  楊: "ㄧ",
+  葉: "ㄧ",
+  董: "ㄉ",
+  詹: "ㄓ",
+  廖: "ㄌ",
+  劉: "ㄌ",
+  潘: "ㄆ",
+  蔡: "ㄘ",
+  鄭: "ㄓ",
+  蕭: "ㄒ",
+  賴: "ㄌ",
+  謝: "ㄒ",
+  鍾: "ㄓ",
+  魏: "ㄨ",
+  簡: "ㄐ",
+  羅: "ㄌ",
+  蘇: "ㄙ",
+  亞: "ㄧ",
+  北: "ㄅ",
+  卜: "ㄅ",
+  千: "ㄑ",
+  亮: "ㄌ",
+  余: "ㄩ",
+  元: "ㄩ",
+  光: "ㄍ",
+  全: "ㄑ",
+  動: "ㄉ",
+  台: "ㄊ",
+  合: "ㄏ",
+  吉: "ㄐ",
+  和: "ㄏ",
+  喬: "ㄑ",
+  嘉: "ㄐ",
+  大: "ㄉ",
+  威: "ㄨ",
+  富: "ㄈ",
+  尚: "ㄕ",
+  屏: "ㄆ",
+  崔: "ㄘ",
+  巨: "ㄐ",
+  康: "ㄎ",
+  急: "ㄐ",
+  惠: "ㄏ",
+  採: "ㄘ",
+  昕: "ㄒ",
+  新: "ㄒ",
+  曲: "ㄑ",
+  曹: "ㄘ",
+  樂: "ㄌ",
+  泉: "ㄑ",
+  溢: "ㄧ",
+  生: "ㄕ",
+  病: "ㄅ",
+  盧: "ㄌ",
+  神: "ㄕ",
+  秀: "ㄒ",
+  科: "ㄎ",
+  聚: "ㄐ",
+  肽: "ㄊ",
+  臨: "ㄌ",
+  藍: "ㄌ",
+  裴: "ㄆ",
+  連: "ㄌ",
+  達: "ㄉ",
+  遠: "ㄩ",
+  醫: "ㄧ",
+  長: "ㄔ",
+  齊: "ㄑ",
+  魯: "ㄌ",
+  鼎: "ㄉ",
+  京: "ㄐ",
+  傑: "ㄐ",
+  南: "ㄋ",
+  萬: "ㄨ",
+  趙: "ㄓ",
+  蔣: "ㄐ",
+  農: "ㄋ",
+  植: "ㄓ",
+  畢: "ㄅ",
+  呈: "ㄔ",
+  馬: "ㄇ",
+  饒: "ㄖ",
+};
+
 const seedData = {
   settings: {},
   products: [
@@ -91,6 +253,7 @@ let timelineDeleteTarget = null;
 let timelineEditTarget = null;
 let customerSearch = "";
 let customerInitial = "all";
+let customerCharacter = "all";
 let customerPage = 1;
 let customerPageSize = 10;
 let dbClient = null;
@@ -115,6 +278,7 @@ const els = {
   dataSource: document.querySelector("#dataSource"),
   customerSearch: document.querySelector("#customerSearch"),
   customerInitialFilter: document.querySelector("#customerInitialFilter"),
+  customerCharacterFilter: document.querySelector("#customerCharacterFilter"),
   customerFilterCount: document.querySelector("#customerFilterCount"),
   customerPageSize: document.querySelector("#customerPageSize"),
   customerPrevPage: document.querySelector("#customerPrevPage"),
@@ -447,7 +611,29 @@ function getCustomers() {
 }
 
 function customerInitialKey(name) {
-  return [...name.trim()][0]?.toUpperCase() || "#";
+  const character = customerFirstCharacter(name);
+  if (!character) return "其他";
+  if (/^[A-Za-z]$/.test(character)) return character.toUpperCase();
+  if (/^\d$/.test(character)) return "0-9";
+  return CUSTOMER_BOPOMOFO_MAP[character] || "其他";
+}
+
+function customerCharacterKey(name) {
+  return customerFirstCharacter(name) || "#";
+}
+
+function customerFirstCharacter(name) {
+  return [...String(name ?? "").trim()][0] || "";
+}
+
+function customerInitialSort(a, b) {
+  const aIndex = BOPOMOFO_ORDER.indexOf(a);
+  const bIndex = BOPOMOFO_ORDER.indexOf(b);
+  if (aIndex !== -1 || bIndex !== -1) {
+    return (aIndex === -1 ? BOPOMOFO_ORDER.length : aIndex) -
+      (bIndex === -1 ? BOPOMOFO_ORDER.length : bIndex);
+  }
+  return a.localeCompare(b, "zh-Hant");
 }
 
 function getAllDates() {
@@ -656,6 +842,10 @@ function renderSales(product, basePrice) {
     .filter((sale) =>
       customerInitial === "all" ||
       customerInitialKey(sale.customer) === customerInitial
+    )
+    .filter((sale) =>
+      customerCharacter === "all" ||
+      customerCharacterKey(sale.customer) === customerCharacter
     );
 
   els.customerFilterCount.textContent =
@@ -734,22 +924,50 @@ function renderCustomerPagination(totalPages) {
 function renderCustomerInitialFilter(product) {
   const initials = [
     ...new Set(product.sales.map((sale) => customerInitialKey(sale.customer))),
-  ].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  ].sort(customerInitialSort);
 
   if (customerInitial !== "all" && !initials.includes(customerInitial)) {
     customerInitial = "all";
   }
 
-  const buttons = [
+  const initialButtons = [
     { key: "all", label: "全部" },
     ...initials.map((initial) => ({ key: initial, label: initial })),
   ];
-  els.customerInitialFilter.innerHTML = buttons
+  els.customerInitialFilter.innerHTML = initialButtons
     .map(
       (button) =>
         `<button class="${
           button.key === customerInitial ? "active" : ""
         }" data-initial="${escapeHtml(button.key)}">${
+          escapeHtml(button.label)
+        }</button>`,
+    )
+    .join("");
+
+  const availableCharacters = product.sales
+    .filter((sale) =>
+      customerInitial === "all" ||
+      customerInitialKey(sale.customer) === customerInitial
+    )
+    .map((sale) => customerCharacterKey(sale.customer));
+  const characters = [...new Set(availableCharacters)]
+    .sort((a, b) => a.localeCompare(b, "zh-Hant"));
+
+  if (customerCharacter !== "all" && !characters.includes(customerCharacter)) {
+    customerCharacter = "all";
+  }
+
+  const characterButtons = [
+    { key: "all", label: "全部字" },
+    ...characters.map((character) => ({ key: character, label: character })),
+  ];
+  els.customerCharacterFilter.innerHTML = characterButtons
+    .map(
+      (button) =>
+        `<button class="${
+          button.key === customerCharacter ? "active" : ""
+        }" data-character="${escapeHtml(button.key)}">${
           escapeHtml(button.label)
         }</button>`,
     )
@@ -1547,6 +1765,15 @@ els.customerInitialFilter.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   customerInitial = button.dataset.initial;
+  customerCharacter = "all";
+  customerPage = 1;
+  renderDetail();
+});
+
+els.customerCharacterFilter.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  customerCharacter = button.dataset.character;
   customerPage = 1;
   renderDetail();
 });

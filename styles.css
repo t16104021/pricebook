@@ -386,10 +386,10 @@ th:last-child {
 }
 
 .customer-filter-row {
-  display: flex;
+  display: grid;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
 }
 
 .customer-filter {
@@ -398,11 +398,18 @@ th:last-child {
   padding-bottom: 2px;
 }
 
+.customer-filter + .customer-filter {
+  grid-column: 1 / -1;
+}
+
 .customer-filter button {
   min-width: 38px;
 }
 
 .customer-filter-row span {
+  align-self: start;
+  grid-column: 2;
+  grid-row: 1;
   color: var(--muted);
   font-size: 14px;
   white-space: nowrap;
