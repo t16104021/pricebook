@@ -272,7 +272,7 @@ h1 {
   min-height: 74px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   text-align: left;
   background: transparent;
@@ -302,7 +302,9 @@ h1 {
 }
 
 .item-main {
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: calc(100% - 104px);
 }
 
 .item-main small {
@@ -334,6 +336,7 @@ h1 {
 }
 
 .item-price {
+  flex: 0 0 auto;
   white-space: nowrap;
   font-size: 15px !important;
   line-height: 20px !important;
