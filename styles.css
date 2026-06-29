@@ -43,6 +43,7 @@ button {
 .command-band,
 .workspace,
 .summary-grid {
+  width: 100%;
   max-width: 1380px;
   margin: 0 auto;
 }
@@ -225,6 +226,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   min-height: 620px;
+  min-width: 0;
 }
 
 .panel-header,
@@ -310,6 +312,24 @@ h1 {
   padding: 20px;
 }
 
+.detail-content,
+.detail-header > div,
+.customer-controls,
+.customer-table-wrap,
+.timeline,
+.timeline-swipe,
+.timeline-item,
+.timeline-body {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.detail-header h2,
+.timeline-body strong,
+.timeline-body span {
+  overflow-wrap: anywhere;
+}
+
 .empty-state {
   min-height: 570px;
   display: grid;
@@ -367,6 +387,7 @@ th:last-child {
 
 .customer-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .customer-controls {
@@ -489,6 +510,7 @@ th:last-child {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 12px;
+  min-width: 0;
 }
 
 .timeline-controls label {
@@ -500,6 +522,8 @@ th:last-child {
 }
 
 .timeline-controls input {
+  width: 100%;
+  max-width: 100%;
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -746,7 +770,7 @@ label textarea {
 
 @media (max-width: 560px) {
   .app-shell {
-    padding: 14px;
+    padding: 10px;
   }
 
   .top-actions,
@@ -754,6 +778,43 @@ label textarea {
   .detail-actions,
   .customer-filter-row {
     flex-wrap: wrap;
+  }
+
+  .panel-header,
+  .detail-header,
+  .timeline-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .detail-panel {
+    padding: 14px;
+  }
+
+  .detail-actions,
+  .detail-actions button,
+  .section-heading .primary-button {
+    width: 100%;
+  }
+
+  .customer-filter-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .customer-filter-row span {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .timeline-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .timeline-controls .segmented,
+  .timeline-customer-search,
+  #clearTimelineRange {
+    grid-column: 1 / -1;
   }
 
   h1 {
