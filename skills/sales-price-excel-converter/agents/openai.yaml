@@ -1,0 +1,4 @@
+interface:
+  display_name: "Excel 售價資料轉換"
+  short_description: "將銷貨資料整理成產品售價管理匯入格式。"
+  default_prompt: "使用 $sales-price-excel-converter 將銷貨資料轉成產品售價管理格式。"

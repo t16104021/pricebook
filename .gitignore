@@ -3,4 +3,7 @@ __pycache__/
 .DS_Store
 pricebook.sqlite3
 data/
+database/
+.superpowers/
+*.Rhistory
 supabase/.temp/

@@ -535,6 +535,7 @@ function buildTimeline(product) {
       date: entry.date,
       label: sale.customer,
       price: entry.price,
+      quantity: entry.quantity,
       note: entry.note || "客戶售價更新",
       saleIndex,
       priceIndex,
@@ -629,7 +630,7 @@ function renderSales(product, basePrice) {
 
   if (!product.sales.length) {
     els.salesTable.innerHTML =
-      `<tr><td class="empty-row" colspan="5">尚未設定客戶售價</td></tr>`;
+      `<tr><td class="empty-row" colspan="6">尚未設定客戶售價</td></tr>`;
     els.customerFilterCount.textContent = "0 筆";
     renderCustomerPagination(1);
     return;
@@ -650,7 +651,7 @@ function renderSales(product, basePrice) {
 
   if (!filteredSales.length) {
     els.salesTable.innerHTML =
-      `<tr><td class="empty-row" colspan="5">沒有符合條件的客戶售價</td></tr>`;
+      `<tr><td class="empty-row" colspan="6">沒有符合條件的客戶售價</td></tr>`;
     customerPage = 1;
     renderCustomerPagination(1);
     return;
@@ -679,6 +680,7 @@ function renderSales(product, basePrice) {
     tr.innerHTML = `
         <td>${escapeHtml(sale.customer)}</td>
         <td><strong>${currency(current.price)}</strong></td>
+        <td>${formatQuantity(current.quantity)}</td>
         <td>${formatDate(current.date)}</td>
         <td class="${diff >= 0 ? "margin-positive" : "margin-negative"}">${
       diff >= 0 ? "+" : ""
@@ -689,7 +691,7 @@ function renderSales(product, basePrice) {
       `;
     tr.querySelector("button").addEventListener(
       "click",
-      () => openSaleDialog(sale.customer, current.price),
+      () => openSaleDialog(sale.customer, current.price, current.quantity),
     );
     els.salesTable.append(tr);
   });
@@ -759,7 +761,11 @@ function renderTimeline(product) {
       <div class="timeline-item">
         <div class="timeline-date">${formatDate(item.date)}</div>
         <div class="timeline-body">
-          <strong>${escapeHtml(item.label)} · ${currency(item.price)}</strong>
+          <strong>${escapeHtml(item.label)} · ${currency(item.price)}${
+      item.type === "sale" && hasQuantity(item.quantity)
+        ? ` · 數量 ${formatQuantity(item.quantity)}`
+        : ""
+    }</strong>
           <span>${escapeHtml(item.note)}</span>
         </div>
         <span class="badge ${item.type === "sale" ? "sale" : ""}">${
@@ -899,10 +905,11 @@ function openBaseDialog() {
   els.basePriceDialog.showModal();
 }
 
-function openSaleDialog(customer = "", price = "") {
+function openSaleDialog(customer = "", price = "", quantity = "") {
   els.saleForm.reset();
   els.saleForm.elements.customer.value = customer;
   els.saleForm.elements.price.value = price;
+  els.saleForm.elements.quantity.value = hasQuantity(quantity) ? quantity : "";
   els.saleForm.elements.date.value = today();
   els.saleDialog.showModal();
 }
@@ -1047,6 +1054,7 @@ function updateSaleFromForm() {
 
   sale.prices.push({
     price: Number(form.price.value),
+    quantity: normalizeQuantity(form.quantity.value),
     date: form.date.value,
     note: form.note.value.trim() || "客戶售價更新",
   });
@@ -1093,6 +1101,7 @@ function salePriceRows() {
         客戶: sale.customer,
         生效日期: entry.date,
         客戶售價: Number(entry.price),
+        數量: hasQuantity(entry.quantity) ? Number(entry.quantity) : "",
         備註: entry.note || "",
       }))
     )
@@ -1131,6 +1140,7 @@ function exportData() {
     "客戶",
     "生效日期",
     "客戶售價",
+    "數量",
     "備註",
   ]);
   appendSheet(
@@ -1154,7 +1164,7 @@ function exportData() {
       {
         項目: "新增客戶售價",
         說明:
-          "在「客戶售價」填 SKU、客戶、生效日期、客戶售價、備註。日期格式建議 yyyy-mm-dd。",
+          "在「客戶售價」填 SKU、客戶、生效日期、客戶售價、數量、備註。日期格式建議 yyyy-mm-dd，數量可留空。",
       },
       {
         項目: "對應規則",
@@ -1232,6 +1242,22 @@ function normalizeDate(value) {
 function normalizePrice(value) {
   const number = Number(String(value || "").replaceAll(",", "").trim());
   return Number.isFinite(number) ? number : 0;
+}
+
+function normalizeQuantity(value) {
+  const text = String(value ?? "").replaceAll(",", "").trim();
+  if (!text) return "";
+  const number = Number(text);
+  return Number.isFinite(number) ? number : "";
+}
+
+function hasQuantity(value) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function formatQuantity(value) {
+  if (!hasQuantity(value)) return "未記錄";
+  return Number(value).toLocaleString("zh-TW", { maximumFractionDigits: 2 });
 }
 
 function makeProductId(sku) {
@@ -1318,6 +1344,9 @@ function workbookToData(workbook) {
 
     sale.prices.push({
       price,
+      quantity: normalizeQuantity(
+        rowValue(row, ["數量", "quantity", "銷貨數量"]),
+      ),
       date,
       note: String(rowValue(row, ["備註", "note"])).trim() || "客戶售價更新",
     });
