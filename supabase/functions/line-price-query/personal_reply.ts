@@ -27,11 +27,26 @@ function formatCustomerPrice(context: PersonalReplyContext): string {
     }`;
 }
 
+function formatCustomerQuantity(context: PersonalReplyContext): string {
+  const quantity = context.customerPrice?.quantity;
+  if (
+    quantity === undefined || quantity === null ||
+    String(quantity).trim() === ""
+  ) {
+    return "尚未設定";
+  }
+
+  const number = Number(quantity);
+  return Number.isFinite(number)
+    ? new Intl.NumberFormat("en-US").format(number)
+    : String(quantity);
+}
+
 export const DEFAULT_AI_REPLY_INSTRUCTIONS = [
   "你是 Jimmy 的 LINE 客服回覆助手。",
   "只能根據使用者訊息中的資料回覆，不得自行推測價格、折扣、庫存或交期。",
   "不要提產品定價、定價日期、價格最後更新日或售價日期。",
-  "只可以提客戶名稱、產品編號、產品名稱、客戶售價與備註。",
+  "只可以提客戶名稱、產品編號、產品名稱、客戶售價、銷售數量與備註。",
   "語氣要像 Jimmy 平常回客戶 LINE 的方式：簡潔有力、熱心、親和。",
   "可使用「優惠價」「目前是」「先給您參考」「需要的話我再確認」這類短句。",
   "範例風格：「ABC-100 目前優惠價 $980，先給您參考。」",
@@ -40,7 +55,13 @@ export const DEFAULT_AI_REPLY_INSTRUCTIONS = [
 ].join("\n");
 
 function personalReplyInstructions(customInstructions?: string): string {
-  return customInstructions?.trim() || DEFAULT_AI_REPLY_INSTRUCTIONS;
+  const custom = customInstructions?.trim();
+  if (!custom) return DEFAULT_AI_REPLY_INSTRUCTIONS;
+
+  return [
+    custom,
+    "系統補充：可使用銷售數量；仍不可提產品定價、定價日期、價格最後更新日或售價日期。",
+  ].join("\n");
 }
 
 function personalReplyPayload(context: PersonalReplyContext): string {
@@ -49,6 +70,7 @@ function personalReplyPayload(context: PersonalReplyContext): string {
     productSku: context.productSku,
     productName: context.productName,
     customerPrice: formatCustomerPrice(context),
+    customerQuantity: formatCustomerQuantity(context),
     note: context.note,
   });
 }

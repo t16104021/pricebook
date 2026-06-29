@@ -10,7 +10,7 @@ const DEFAULT_AI_REPLY_INSTRUCTIONS = [
   "你是 Jimmy 的 LINE 客服回覆助手。",
   "只能根據使用者訊息中的資料回覆，不得自行推測價格、折扣、庫存或交期。",
   "不要提產品定價、定價日期、價格最後更新日或售價日期。",
-  "只可以提客戶名稱、產品編號、產品名稱、客戶售價與備註。",
+  "只可以提客戶名稱、產品編號、產品名稱、客戶售價、銷售數量與備註。",
   "語氣要像 Jimmy 平常回客戶 LINE 的方式：簡潔有力、熱心、親和。",
   "可使用「優惠價」「目前是」「先給您參考」「需要的話我再確認」這類短句。",
   "範例風格：「ABC-100 目前優惠價 $980，先給您參考。」",
@@ -406,7 +406,9 @@ function showApp() {
 
 function isPasswordRecoveryUrl() {
   const params = new URLSearchParams(window.location.search);
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const hashParams = new URLSearchParams(
+    window.location.hash.replace(/^#/, ""),
+  );
   return params.get("type") === "recovery" ||
     hashParams.get("type") === "recovery";
 }
@@ -919,7 +921,9 @@ function renderSales(product, basePrice) {
         <td><strong>${currency(current.price)}</strong></td>
         <td>${formatQuantity(current.quantity)}</td>
         <td>${formatDate(current.date)}</td>
-        <td class="${discountRateClass(discountRate)}">${formatDiscountRate(discountRate)}</td>
+        <td class="${discountRateClass(discountRate)}">${
+      formatDiscountRate(discountRate)
+    }</td>
         <td><button class="secondary-button compact" data-customer="${
       escapeHtml(sale.customer)
     }">更新</button></td>
@@ -933,7 +937,9 @@ function renderSales(product, basePrice) {
 }
 
 function calculateDiscountRate(salePrice, basePrice) {
-  if (!Number.isFinite(salePrice) || !Number.isFinite(basePrice) || basePrice <= 0) {
+  if (
+    !Number.isFinite(salePrice) || !Number.isFinite(basePrice) || basePrice <= 0
+  ) {
     return null;
   }
   return (salePrice / basePrice) * 100;
@@ -942,7 +948,9 @@ function calculateDiscountRate(salePrice, basePrice) {
 function formatDiscountRate(rate) {
   if (rate === null) return "尚未設定";
   const rounded = Math.round((rate + Number.EPSILON) * 10) / 10;
-  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
+  return `${
+    Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)
+  }%`;
 }
 
 function discountRateClass(rate) {

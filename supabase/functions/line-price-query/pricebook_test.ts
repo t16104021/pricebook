@@ -16,7 +16,7 @@ const payload: PricebookPayload = {
       sales: [{
         customer: "長青商行",
         prices: [
-          { price: 980, date: "2026-06-27", note: "年度合約價" },
+          { price: 980, date: "2026-06-27", quantity: 12, note: "年度合約價" },
           { price: 900, date: "2026-02-01", note: "舊售價" },
         ],
       }],
@@ -47,6 +47,7 @@ Deno.test("prefers an exact case-insensitive SKU and returns latest prices", () 
       "產品定價：NT$1,200",
       "定價日期：2026/06/01",
       "客戶售價：NT$980",
+      "銷售數量：12",
       "售價日期：2026/06/27",
       "備註：年度合約價",
     ].join("\n"),
@@ -67,7 +68,7 @@ Deno.test("uses the last appended price when dates are equal", () => {
         customer: "長青商行",
         prices: [
           { price: 800, date: "2026-06-27", note: "上午" },
-          { price: 950, date: "2026-06-27", note: "下午追加" },
+          { price: 950, date: "2026-06-27", quantity: 3, note: "下午追加" },
         ],
       }],
     }],
@@ -81,6 +82,7 @@ Deno.test("uses the last appended price when dates are equal", () => {
       "產品定價：NT$1,250",
       "定價日期：2026/06/27",
       "客戶售價：NT$950",
+      "銷售數量：3",
       "售價日期：2026/06/27",
       "備註：下午追加",
     ].join("\n"),
@@ -156,6 +158,7 @@ Deno.test("shows unset base and customer prices for a single product", () => {
       "產品定價：尚未設定",
       "定價日期：尚未設定",
       "客戶售價：尚未設定",
+      "銷售數量：尚未設定",
       "售價日期：尚未設定",
       "備註：無",
     ].join("\n"),

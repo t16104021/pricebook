@@ -29,6 +29,21 @@ function formatDate(entry: PriceEntry | null): string {
   return entry === null ? "尚未設定" : entry.date.replaceAll("-", "/");
 }
 
+function formatQuantity(entry: PriceEntry | null): string {
+  const quantity = entry?.quantity;
+  if (
+    quantity === undefined || quantity === null ||
+    String(quantity).trim() === ""
+  ) {
+    return "尚未設定";
+  }
+
+  const number = Number(quantity);
+  return Number.isFinite(number)
+    ? new Intl.NumberFormat("en-US").format(number)
+    : String(quantity);
+}
+
 export function queryPricebook(
   payload: PricebookPayload,
   customer: string,
@@ -95,6 +110,7 @@ export function queryPricebookResult(
     `產品定價：${formatPrice(basePrice)}`,
     `定價日期：${formatDate(basePrice)}`,
     `客戶售價：${formatPrice(customerPrice)}`,
+    `銷售數量：${formatQuantity(customerPrice)}`,
     `售價日期：${formatDate(customerPrice)}`,
     `備註：${note}`,
   ].join("\n");

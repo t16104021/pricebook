@@ -1,6 +1,7 @@
 export interface PriceEntry {
   price: number;
   date: string;
+  quantity?: number | string;
   note?: string;
 }
 

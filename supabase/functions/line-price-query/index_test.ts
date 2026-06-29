@@ -17,7 +17,7 @@ const payload: PricebookPayload = {
     basePrices: [{ price: 1200, date: "2026-06-01" }],
     sales: [{
       customer: "長青商行",
-      prices: [{ price: 980, date: "2026-06-27" }],
+      prices: [{ price: 980, date: "2026-06-27", quantity: 12 }],
     }],
   }],
 };
@@ -225,7 +225,7 @@ Deno.test("sends fixed and personalized replies for a found price", async () => 
     customer: "長青商行",
     productSku: "ABC-100",
     productName: "高效濾芯",
-    customerPrice: { price: 980, date: "2026-06-27" },
+    customerPrice: { price: 980, date: "2026-06-27", quantity: 12 },
     note: "無",
   }]);
 });

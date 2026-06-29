@@ -26,7 +26,12 @@ Deno.test("creates a personalized reply without sending base price or dates", as
       customer: "長青商行",
       productSku: "ABC-100",
       productName: "高效濾芯",
-      customerPrice: { price: 980, date: "2026-06-27", note: "年度合約價" },
+      customerPrice: {
+        price: 980,
+        date: "2026-06-27",
+        quantity: 12,
+        note: "年度合約價",
+      },
       note: "年度合約價",
     },
     "openai-key",
@@ -39,6 +44,8 @@ Deno.test("creates a personalized reply without sending base price or dates", as
     "長青商行您好，ABC-100 高效濾芯目前貴司售價是 NT$980，這邊先提供給您參考。",
   );
   assertStringIncludes(requestBody, "NT$980");
+  assertStringIncludes(requestBody, "12");
+  assertStringIncludes(requestBody, "銷售數量");
   assertStringIncludes(requestBody, "像 Jimmy 平常回客戶 LINE 的方式");
   assertStringIncludes(requestBody, "簡潔有力");
   assertStringIncludes(requestBody, "熱心、親和");
@@ -97,7 +104,12 @@ Deno.test("creates a Gemini personalized reply without sending base price or dat
       customer: "長青商行",
       productSku: "ABC-100",
       productName: "高效濾芯",
-      customerPrice: { price: 980, date: "2026-06-27", note: "年度合約價" },
+      customerPrice: {
+        price: 980,
+        date: "2026-06-27",
+        quantity: 12,
+        note: "年度合約價",
+      },
       note: "年度合約價",
     },
     "gemini-key",
@@ -115,6 +127,8 @@ Deno.test("creates a Gemini personalized reply without sending base price or dat
   );
   assertStringIncludes(requestUrl, "key=gemini-key");
   assertStringIncludes(requestBody, "NT$980");
+  assertStringIncludes(requestBody, "12");
+  assertStringIncludes(requestBody, "銷售數量");
   assertStringIncludes(requestBody, "像 Jimmy 平常回客戶 LINE 的方式");
   assertStringIncludes(requestBody, "簡潔有力");
   assertStringIncludes(requestBody, "熱心、親和");
@@ -179,5 +193,6 @@ Deno.test("uses custom AI reply instructions when configured", async () => {
 
   assertEquals(reply, "ABC-100 目前優惠價 NT$980，先給您參考。");
   assertStringIncludes(requestBody, "自訂 AI 風格：超短句，不要稱謂。");
+  assertStringIncludes(requestBody, "可使用銷售數量");
   assertFalse(requestBody.includes("簡潔有力、熱心、親和"));
 });
