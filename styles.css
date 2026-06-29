@@ -512,15 +512,13 @@ th:last-child {
   top: 0;
   bottom: 0;
   width: 112px;
-  display: flex;
+  display: none;
   align-items: center;
   border: 0;
   padding: 0 22px;
   color: white;
   font-weight: 800;
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease;
 }
 
 .timeline-delete-action {
@@ -539,14 +537,14 @@ th:last-child {
 
 .timeline-swipe.ready-delete .timeline-delete-action,
 .timeline-swipe.ready-edit .timeline-edit-action {
+  display: flex;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
-  opacity: 1;
   pointer-events: auto;
-  z-index: 2;
 }
 
 .timeline-item {
   position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: 120px 1fr auto;
   gap: 12px;
