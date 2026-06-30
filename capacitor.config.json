@@ -2,6 +2,9 @@
   "appId": "com.jimmy.pricebook",
   "appName": "產品售價管理",
   "webDir": "www",
+  "ios": {
+    "contentInset": "always"
+  },
   "server": {
     "url": "https://t16104021.github.io/pricebook/",
     "cleartext": false,

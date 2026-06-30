@@ -22,6 +22,7 @@ GitHub Pages 網頁，所以 App 內看到的版面會和網頁版一致。
 
 - App 打開時載入 GitHub Pages 正式網址。
 - 畫面大小、版面與手機瀏覽器看到的網頁版一致。
+- iOS App 已啟用 `ios.contentInset = "always"`，讓 WebView 避開狀態列與安全區。
 - 前端 UI 更新並推送到 GitHub Pages 後，App 重新打開就會看到新版本。
 - App 需要網路才能使用。
 - 若只改前端網頁內容，通常不用重新安裝 App。
