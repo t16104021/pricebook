@@ -9,8 +9,12 @@
 - 新增 `scripts/build-capacitor.mjs`
 - `npm install` 已安裝 Capacitor 套件
 - `npm run build` 可產生 App 用的 `www/` 靜態檔
+- Xcode 已安裝並設定完成
+- CocoaPods 已安裝
+- `ios/` Xcode 專案已建立
+- `npm run cap:sync:ios` 已同步成功
 
-## 你的 Mac 還需要安裝
+## Mac 環境設定
 
 1. 從 App Store 安裝 Xcode。
 2. 安裝完成後打開 Xcode 一次，讓它完成初始設定。
@@ -22,12 +26,23 @@ xcodebuild -runFirstLaunch
 brew install cocoapods
 ```
 
-## 建立 iOS App
+## 建立或同步 iOS App
 
-完成上面的本機環境後，在專案資料夾執行：
+第一次建立 iOS 專案：
 
 ```bash
 npm run cap:add:ios
+```
+
+之後每次前端程式有更新，先同步到 iOS：
+
+```bash
+npm run cap:sync:ios
+```
+
+打開 Xcode：
+
+```bash
 npm run cap:open:ios
 ```
 

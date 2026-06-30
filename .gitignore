@@ -9,3 +9,4 @@ database/
 supabase/.temp/
 node_modules/
 www/
+ios/App/Pods/
