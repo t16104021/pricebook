@@ -3,6 +3,8 @@
   "appName": "產品售價管理",
   "webDir": "www",
   "server": {
+    "url": "https://t16104021.github.io/pricebook/",
+    "cleartext": false,
     "androidScheme": "https",
     "iosScheme": "https"
   }

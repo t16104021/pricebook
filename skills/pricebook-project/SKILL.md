@@ -127,11 +127,13 @@ decisions, read `references/project-map.md`.
 
 1. iOS App 是 Capacitor 包裝現有靜態前端，不是另一套資料庫。
 2. App 仍使用 Supabase Auth/database 與既有 Edge Functions。
-3. 前端改完若要更新 iPhone/iPad App，要先跑 `npm run cap:sync:ios`，再用 Xcode
-   Run 安裝。
-4. `ios/App/Pods/`、`ios/App/App/public/`、`www/`、`node_modules/`
+3. App 目前透過 `capacitor.config.json` 的 `server.url` 載入 GitHub Pages
+   正式網址，讓 App 畫面與網頁版一致。
+4. 前端改完並推送到 GitHub Pages 後，通常重新打開 App 就會看到新 UI；若改 native
+   設定才需要 `npm run cap:sync:ios` 後用 Xcode Run 安裝。
+5. `ios/App/Pods/`、`ios/App/App/public/`、`www/`、`node_modules/`
    是產生物，不要提交。
-5. Xcode Team 設定會寫入 `ios/App/App.xcodeproj/project.pbxproj`；若使用者已選
+6. Xcode Team 設定會寫入 `ios/App/App.xcodeproj/project.pbxproj`；若使用者已選
    Team，可以提交。
 
 - Inspect `NATIVE-APP.md`, `capacitor.config.json`, `package.json`,

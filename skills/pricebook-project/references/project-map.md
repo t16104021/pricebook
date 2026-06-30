@@ -41,8 +41,8 @@
 ## Hosting And Services
 
 - Frontend: GitHub Pages.
-- Native shell: Capacitor iOS project in `ios/`, using the same frontend and
-  Supabase backend.
+- Native shell: Capacitor iOS project in `ios/`, loading the GitHub Pages
+  frontend through Capacitor `server.url` and using the same Supabase backend.
 - Auth/database: Supabase.
 - LINE webhook: Supabase Edge Function `line-price-query`.
 - AI wording: Gemini via `GEMINI_API_KEY`, with OpenAI fallback if configured.
@@ -158,10 +158,11 @@ private user IDs unless the user explicitly asks and it is safe.
 - 中文決策：`近期異動` 目前看 `updatedAt`，也就是系統操作時間；`歷史紀錄`
   是搜尋時間軸文字，不等於近期異動。
 - GitHub alone does not store app data; Supabase stores user data.
-- Capacitor iOS App packages the current frontend assets. It still reads/writes
-  Supabase cloud data.
-- To update the installed iOS App after frontend changes, run
-  `npm run cap:sync:ios` and install again from Xcode.
+- Capacitor iOS App loads the live GitHub Pages URL so the App layout matches
+  the web version. It still reads/writes Supabase cloud data.
+- To update the installed iOS App after native setting changes, run
+  `npm run cap:sync:ios` and install again from Xcode. Frontend-only changes
+  usually update after GitHub Pages refreshes and the App is reopened.
 - Generated native build outputs are ignored: `node_modules/`, `www/`,
   `ios/App/Pods/`, `ios/App/App/public/`.
 - Different Supabase Auth accounts see different data via RLS.
