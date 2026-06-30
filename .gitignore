@@ -7,3 +7,5 @@ database/
 .superpowers/
 *.Rhistory
 supabase/.temp/
+node_modules/
+www/

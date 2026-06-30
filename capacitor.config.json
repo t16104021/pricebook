@@ -1,0 +1,9 @@
+{
+  "appId": "com.jimmy.pricebook",
+  "appName": "產品售價管理",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https"
+  }
+}
