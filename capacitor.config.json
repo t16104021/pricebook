@@ -2,7 +2,9 @@
   "appId": "com.jimmy.pricebook",
   "appName": "產品售價管理",
   "webDir": "www",
+  "backgroundColor": "#f6f7f9",
   "ios": {
+    "backgroundColor": "#f6f7f9",
     "contentInset": "always"
   },
   "server": {
