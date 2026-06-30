@@ -107,12 +107,13 @@ function convertRows(rows) {
   const nameStatsBySku = new Map();
 
   for (const row of rows) {
+    const taxedUnitPrice = calculateTaxedUnitPrice(row);
     if (!bySku.has(row.sku)) {
       bySku.set(row.sku, {
         sku: row.sku,
         productId: productIdFromSku(row.sku),
         latestDate: row.date,
-        maxPrice: row.price,
+        maxPrice: taxedUnitPrice,
         maxPriceDate: row.date,
       });
       nameStatsBySku.set(row.sku, new Map());
@@ -121,10 +122,10 @@ function convertRows(rows) {
     const item = bySku.get(row.sku);
     if (row.date > item.latestDate) item.latestDate = row.date;
     if (
-      row.price > item.maxPrice ||
-      (row.price === item.maxPrice && row.date > item.maxPriceDate)
+      taxedUnitPrice > item.maxPrice ||
+      (taxedUnitPrice === item.maxPrice && row.date > item.maxPriceDate)
     ) {
-      item.maxPrice = row.price;
+      item.maxPrice = taxedUnitPrice;
       item.maxPriceDate = row.date;
     }
 
@@ -154,8 +155,8 @@ function convertRows(rows) {
       item.productId,
       item.sku,
       item.maxPriceDate,
-      roundMoney(item.maxPrice),
-      "歷史最高價",
+      roundPrice(item.maxPrice),
+      "歷史最高含稅單價",
     ])
     .sort((a, b) => String(a[1]).localeCompare(String(b[1]), "zh-Hant"));
 
@@ -167,7 +168,7 @@ function convertRows(rows) {
         row.sku,
         row.customer || row.customerCode || "未命名客戶",
         row.date,
-        roundMoney((row.untaxedAmount * 1.05) / row.quantity),
+        roundPrice(calculateTaxedUnitPrice(row)),
         row.quantity === null ? "" : roundMoney(row.quantity),
         buildNote(row),
       ];
@@ -223,6 +224,10 @@ function buildNote(row) {
   return pieces.join("；");
 }
 
+function calculateTaxedUnitPrice(row) {
+  return (row.untaxedAmount * 1.05) / row.quantity;
+}
+
 function ensureCustomerPriceHeaders(headers) {
   if (headers.includes("數量")) return headers;
   const output = [...headers];
@@ -264,6 +269,11 @@ function roundMoney(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function roundPrice(value) {
+  const rounded = Math.round(value + Number.EPSILON);
+  return rounded % 10 === 1 ? rounded - 1 : rounded;
+}
+
 async function writeWorkbook(converted, templateHeaders, output) {
   const workbook = Workbook.create();
   const sheets = [
@@ -281,12 +291,12 @@ async function writeWorkbook(converted, templateHeaders, output) {
       ],
       [
         "來源規則",
-        "只納入銷貨單別 2301；SKU=銷貨品號；最近異動=該 SKU 最新銷貨日期；產品名稱=品名；產品定價=歷史最高原幣銷貨單價。",
+        "只納入銷貨單別 2301；SKU=銷貨品號；最近異動=該 SKU 最新銷貨日期；產品名稱=品名；產品定價=歷史最高含稅單價。",
       ],
       ["分類方式", "分類依品名關鍵字判讀；同品名固定得到同一分類。"],
       [
         "客戶售價",
-        "每筆銷貨資料會成為一筆客戶售價歷史，客戶售價=(本幣銷貨未稅金額 x 1.05) / 銷貨數量，備註保留銷貨單號與客戶代號。",
+        "每筆銷貨資料會成為一筆客戶售價歷史，產品定價與客戶售價皆以含稅單價四捨五入為整數；若尾數為 1，最後一碼改為 0；備註保留銷貨單號與客戶代號。",
       ],
       [
         "對應規則",
@@ -331,12 +341,12 @@ function formatSheet(sheet, rowCount, colCount, sheetName) {
       sheet.getRangeByIndexes(1, 2, Math.max(rowCount - 1, 1), 1)
         .setNumberFormat("yyyy-mm-dd");
       sheet.getRangeByIndexes(1, 3, Math.max(rowCount - 1, 1), 1)
-        .setNumberFormat("#,##0.00");
+        .setNumberFormat("#,##0");
     } else if (sheetName === "客戶售價") {
       sheet.getRangeByIndexes(1, 3, Math.max(rowCount - 1, 1), 1)
         .setNumberFormat("yyyy-mm-dd");
       sheet.getRangeByIndexes(1, 4, Math.max(rowCount - 1, 1), 1)
-        .setNumberFormat("#,##0.00");
+        .setNumberFormat("#,##0");
       sheet.getRangeByIndexes(1, 5, Math.max(rowCount - 1, 1), 1)
         .setNumberFormat("#,##0.##");
     }

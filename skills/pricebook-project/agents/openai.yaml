@@ -1,4 +1,4 @@
 interface:
   display_name: "Pricebook 專案"
-  short_description: "安全開發與部署產品售價管理系統。"
-  default_prompt: "使用 pricebook-project skill 幫我修改這個產品售價管理專案。"
+  short_description: "安全開發、部署與包裝產品售價管理系統。"
+  default_prompt: "使用 pricebook-project skill 幫我修改這個產品售價管理專案或 iOS App。"
