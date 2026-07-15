@@ -11,7 +11,7 @@
       window.location.href = "https://t16104021.github.io/pricebook/";
     }
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260630-8" />
+    <link rel="stylesheet" href="./styles.css?v=20260715-1" />
   </head>
   <body>
     <main class="login-page" id="authShell">
@@ -60,6 +60,10 @@
             type="button">登出</button>
         </div>
       </header>
+
+      <p class="demo-banner hidden" id="demoBanner" role="status">
+        作品展示模式：以下皆為測試資料，僅供瀏覽與查詢。
+      </p>
 
       <section class="command-band">
         <div class="command-box">
@@ -420,6 +424,6 @@
     <script
       src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="./supabase-config.js?v=20260625-1"></script>
-    <script src="./app.js?v=20260630-6"></script>
+    <script type="module" src="./app.js?v=20260715-1"></script>
   </body>
 </html>

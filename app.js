@@ -1,4 +1,7 @@
+import { createDemoData, isDemoMode } from "./demo-mode.js";
+
 const STORAGE_KEY_PREFIX = "pricing-manager-data-v1";
+const isDemoModeActive = isDemoMode(window.location.search);
 const startedFromPasswordRecoveryLink = isPasswordRecoveryUrl();
 
 const emptyData = {
@@ -242,7 +245,7 @@ const seedData = {
 };
 
 let currentUserId = null;
-let data = loadLocalData();
+let data = isDemoModeActive ? createDemoData() : loadLocalData();
 let selectedProductId = data.products[0]?.id ?? null;
 let query = "";
 let timelineMode = "all";
@@ -268,6 +271,7 @@ const els = {
   authError: document.querySelector("#authError"),
   authSubmit: document.querySelector("#authForm button[type='submit']"),
   logoutBtn: document.querySelector("#logoutBtn"),
+  demoBanner: document.querySelector("#demoBanner"),
   commandInput: document.querySelector("#commandInput"),
   quickFilters: document.querySelector("#quickFilters"),
   productList: document.querySelector("#productList"),
@@ -405,6 +409,8 @@ function authMessage(error) {
 function showApp() {
   els.authShell.classList.add("hidden");
   els.appShell.classList.remove("hidden");
+  document.body.classList.toggle("demo-mode", isDemoModeActive);
+  els.demoBanner.classList.toggle("hidden", !isDemoModeActive);
 }
 
 function isPasswordRecoveryUrl() {
@@ -436,6 +442,16 @@ function initSupabase() {
 }
 
 async function initDataSource() {
+  if (isDemoModeActive) {
+    currentUserId = null;
+    isCloudReady = false;
+    data = createDemoData();
+    selectedProductId = data.products[0]?.id ?? null;
+    showApp();
+    render();
+    return;
+  }
+
   initSupabase();
   if (!dbClient) return;
 
@@ -491,6 +507,7 @@ async function loadCloudData(userId) {
 }
 
 function saveData() {
+  if (isDemoModeActive) return;
   data = ensureDataShape(data);
   localStorage.setItem(localStorageKey(), JSON.stringify(data, null, 2));
   if (!isCloudReady) return;
@@ -876,7 +893,11 @@ function renderSummary() {
   els.customerCount.textContent = customers.length;
   els.priceCount.textContent = priceCount;
   els.lastUpdated.textContent = formatDate(latestDate);
-  els.dataSource.textContent = isCloudReady ? "Supabase" : "離線";
+  els.dataSource.textContent = isDemoModeActive
+    ? "展示資料"
+    : isCloudReady
+    ? "Supabase"
+    : "離線";
   els.customerOptions.innerHTML = customers.map((customer) =>
     `<option value="${escapeHtml(customer)}"></option>`
   ).join("");
@@ -1006,14 +1027,16 @@ function renderSales(product, basePrice) {
         <td class="${discountRateClass(discountRate)}">${
       formatDiscountRate(discountRate)
     }</td>
-        <td><button class="secondary-button compact" data-customer="${
+        <td>${isDemoModeActive ? "" : `<button class="secondary-button compact" data-customer="${
       escapeHtml(sale.customer)
-    }">更新</button></td>
+    }">更新</button>`}</td>
       `;
-    tr.querySelector("button").addEventListener(
-      "click",
-      () => openSaleDialog(sale.customer, current.price, current.quantity),
-    );
+    if (!isDemoModeActive) {
+      tr.querySelector("button").addEventListener(
+        "click",
+        () => openSaleDialog(sale.customer, current.price, current.quantity),
+      );
+    }
     els.salesTable.append(tr);
   });
 }
@@ -1159,6 +1182,7 @@ function renderTimeline(product) {
 }
 
 function addTimelineSwipe(row, item) {
+  if (isDemoModeActive) return;
   const content = row.querySelector(".timeline-item");
   const threshold = 72;
   let startX = 0;

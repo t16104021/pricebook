@@ -86,6 +86,32 @@ h1 {
   margin-top: 6px;
 }
 
+.demo-banner {
+  width: 100%;
+  max-width: 1380px;
+  margin: -4px auto 18px;
+  padding: 12px 14px;
+  border: 1px solid #8fc9bd;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.demo-mode #exportBtn,
+.demo-mode label[for="importFile"],
+.demo-mode #aiSettingsBtn,
+.demo-mode #changePasswordBtn,
+.demo-mode #addProductBtn,
+.demo-mode #logoutBtn,
+.demo-mode #editProductBtn,
+.demo-mode #updateBaseBtn,
+.demo-mode #deleteProductBtn,
+.demo-mode #addSaleBtn,
+.demo-mode .timeline-action {
+  display: none;
+}
+
 .top-actions,
 .section-heading,
 .dialog-actions,
